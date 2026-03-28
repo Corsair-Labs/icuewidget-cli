@@ -48,6 +48,7 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     rich_markup_mode="rich",
+    context_settings={"help_option_names": ["--help", "-h"]},
     help="Create, validate, and package iCUE widgets.",
     epilog=(
         "Examples:\n"
