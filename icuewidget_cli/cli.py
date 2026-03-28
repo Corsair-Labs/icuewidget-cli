@@ -20,15 +20,9 @@ APP_NAME = "icuewidget"
 DEFAULT_FRAMEWORK_VERSION = "1.0.0"
 ALLOWED_PLATFORMS = {"windows"}
 ALLOWED_DEVICE_TYPES = {"dashboard_lcd", "pump_lcd", "keyboard_lcd"}
-ALLOWED_TEMPLATES = {"basic", "settings", "plugin"}
-TEMPLATE_DESCRIPTIONS = {
-    "basic": "Minimal hello-world widget",
-    "settings": "Widget with example configurable properties",
-    "plugin": "Widget with basic plugin initialization flow",
-}
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9.-]+$")
-PROPERTY_NAME_RE = re.compile(r"[^a-z0-9]+")
+SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 console = Console()
 app = typer.Typer(
@@ -39,14 +33,10 @@ app = typer.Typer(
     help="Create, validate, and package iCUE widgets.",
     epilog=(
         "Examples:\n"
-        "  icuewidget initiate ./HelloWidget --template basic\n"
+        "  icuewidget init ./HelloWidget\n"
         "  icuewidget validate ./HelloWidget\n"
         "  icuewidget package ./HelloWidget"
     ),
-)
-
-TEMPLATE_HELP = "Starter template to scaffold.\n" + "\n".join(
-    f"- {name}: {TEMPLATE_DESCRIPTIONS[name]}" for name in sorted(ALLOWED_TEMPLATES)
 )
 
 
@@ -58,11 +48,6 @@ class CliError(Exception):
 class ValidationResult:
     manifest: dict[str, Any]
     warnings: list[str]
-
-
-def print_header() -> None:
-    console.print(f"[bold]{APP_NAME}[/bold] [cyan]{__version__}[/cyan]")
-    console.print("[dim]iCUE widget packaging and scaffolding CLI[/dim]")
 
 
 def main() -> None:
@@ -111,7 +96,7 @@ def package_command(
         None,
         "--output",
         "-o",
-        help="Output .icuewidget file path (defaults to a sibling file named after manifest id).",
+        help="Output .icuewidget file path (defaults to a sibling file named after widget name).",
         rich_help_panel="Packaging Options",
     ),
 ) -> None:
@@ -142,20 +127,13 @@ def package_command(
     print_warnings(result.warnings)
 
 
-@app.command("initiate")
-def initiate_command(
+@app.command("init")
+def init_command(
     path: str = typer.Argument(".", help="Target directory for the widget scaffold."),
     force: bool = typer.Option(
         False,
         "--force",
         help="Allow scaffolding into a non-empty directory.",
-        rich_help_panel="Scaffolding Options",
-    ),
-    template: str | None = typer.Option(
-        None,
-        "--template",
-        help=TEMPLATE_HELP,
-        case_sensitive=False,
         rich_help_panel="Scaffolding Options",
     ),
 ) -> None:
@@ -170,29 +148,25 @@ def initiate_command(
     print_header()
     console.print()
     console.print(Panel.fit("Interactive widget initialization", border_style="blue"))
-    console.print("[dim]Use arrows, space, and Enter where menus are shown.[/dim]")
+    console.print(
+        "[dim]A configurable hello-world widget for dashboard_lcd on Windows will be created.[/dim]"
+    )
     console.print(Rule(style="blue"))
 
     directory_name = target_dir.name if target_dir.name else "my-widget"
-    suggested_name = title_case_from_slug(directory_name)
-    widget_name = prompt("Widget name", suggested_name)
-    selected_template = normalize_template(template or prompt_template("basic"))
-
-    slug = slugify(widget_name) or slugify(directory_name) or "mywidget"
-    author = prompt("Author", "Your Name")
+    widget_name = prompt_required("Widget name")
+    author = prompt_required("Author")
     organization_domain = prompt("Organization domain (optional)", "")
+    widget_slug = slugify(widget_name) or slugify(directory_name) or "widget"
     widget_id = prompt_validated(
         "Widget id",
-        build_default_widget_id(organization_domain, author, slug),
+        build_default_widget_id(organization_domain, author, widget_slug),
         validate_identifier,
         "Use only letters, digits, dots, and hyphens.",
     )
     description = prompt("Description", f"A widget named {widget_name}")
     version = prompt_validated(
-        "Version",
-        "1.0.0",
-        is_semver,
-        "Use semantic version format like 1.0.0.",
+        "Version", "1.0.0", is_semver, "Use semantic version format like 1.0.0."
     )
     min_framework_version = prompt_validated(
         "Minimum framework version",
@@ -201,40 +175,7 @@ def initiate_command(
         "Use semantic version format like 1.0.0.",
     )
     preview_icon = prompt("Preview icon path", "resources/icon.svg")
-
-    devices = ["dashboard_lcd"]
-    interactive = prompt_yes_no("Interactive widget", False)
-    touch_features: list[str] = []
-    if interactive:
-        touch_features = prompt_choice_list(
-            "Dashboard features",
-            ["sensor-screen"],
-            ["sensor-screen"],
-        )
-
-    required_plugins: list[str] = []
-    modules: list[str] = []
-    if selected_template == "plugin":
-        required_plugins = prompt_csv_list(
-            "Required plugins",
-            ["SensorsDataProvider"],
-            "Comma-separated plugin ids, or leave blank to accept the default plugin example.",
-        )
-        modules = prompt_csv_list(
-            "JavaScript modules",
-            [],
-            "Comma-separated module file paths relative to the widget root, or leave blank for none.",
-        )
-
-    create_translation = prompt_yes_no("Create translation.json", True)
-    create_starter_stylesheet = prompt_yes_no("Create styles/main.css", True)
-
-    supported_devices: list[dict[str, Any]] = []
-    for device in devices:
-        entry: dict[str, Any] = {"type": device}
-        if device == "dashboard_lcd" and touch_features:
-            entry["features"] = touch_features
-        supported_devices.append(entry)
+    create_stylesheet = prompt_yes_no("Create styles/main.css", True)
 
     manifest = {
         "author": author,
@@ -245,41 +186,27 @@ def initiate_command(
         "preview_icon": preview_icon,
         "min_framework_version": min_framework_version,
         "os": [{"platform": "windows"}],
-        "supported_devices": supported_devices,
+        "supported_devices": [{"type": "dashboard_lcd"}],
     }
-    if interactive:
-        manifest["interactive"] = True
-    if required_plugins:
-        manifest["required_plugins"] = required_plugins
-    if modules:
-        manifest["modules"] = modules
 
     resources_dir = target_dir / "resources"
     resources_dir.mkdir(parents=True, exist_ok=True)
 
     write_json(target_dir / "manifest.json", manifest)
-    if create_translation:
-        write_text(target_dir / "translation.json", build_translation_json(widget_name))
+    write_text(target_dir / "translation.json", build_translation_json(widget_name))
     write_text(
         target_dir / "index.html",
         build_index_html(
             widget_name,
-            template=selected_template,
-            use_translation=create_translation,
-            stylesheet_path="styles/main.css" if create_starter_stylesheet else None,
+            stylesheet_path="styles/main.css" if create_stylesheet else None,
         ),
     )
     write_text(resources_dir / "icon.svg", build_default_icon_svg(widget_name))
 
-    if create_starter_stylesheet:
+    if create_stylesheet:
         styles_dir = target_dir / "styles"
         styles_dir.mkdir(parents=True, exist_ok=True)
         write_text(styles_dir / "main.css", build_starter_stylesheet())
-
-    for module_path in modules:
-        file_path = target_dir / module_path
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        write_text(file_path, build_starter_module(module_path))
 
     console.print()
     console.print(
@@ -291,19 +218,17 @@ def initiate_command(
     files_table.add_column("Path")
     files_table.add_row("manifest.json", str(target_dir / "manifest.json"))
     files_table.add_row("index.html", str(target_dir / "index.html"))
-    files_table.add_row("icon.svg", str(resources_dir / "icon.svg"))
-    if create_translation:
-        files_table.add_row("translation.json", str(target_dir / "translation.json"))
-    if create_starter_stylesheet:
+    files_table.add_row("translation.json", str(target_dir / "translation.json"))
+    files_table.add_row("resources/icon.svg", str(resources_dir / "icon.svg"))
+    if create_stylesheet:
         files_table.add_row("styles/main.css", str(target_dir / "styles" / "main.css"))
-    for module_path in modules:
-        files_table.add_row(module_path, str(target_dir / module_path))
     console.print(files_table)
 
     summary_table = Table(show_header=False, box=None, pad_edge=False)
     summary_table.add_row("Directory", str(target_dir))
-    summary_table.add_row("Template", selected_template)
     summary_table.add_row("Widget id", widget_id)
+    summary_table.add_row("Platform", "windows")
+    summary_table.add_row("Device", "dashboard_lcd")
     console.print(summary_table)
 
     next_steps = Table(show_header=False, box=None, pad_edge=False)
@@ -312,6 +237,21 @@ def initiate_command(
     next_steps.add_row("3.", f"Run `{APP_NAME} validate {target_dir}`")
     next_steps.add_row("4.", f"Run `{APP_NAME} package {target_dir}` when ready")
     console.print(Panel.fit(next_steps, title="Next steps", border_style="cyan"))
+
+
+@app.command("initiate", hidden=True)
+def initiate_alias(
+    path: str = typer.Argument(".", help="Target directory for the widget scaffold."),
+    force: bool = typer.Option(
+        False, "--force", help="Allow scaffolding into a non-empty directory."
+    ),
+) -> None:
+    init_command(path=path, force=force)
+
+
+def print_header() -> None:
+    console.print(f"[bold]{APP_NAME}[/bold] [cyan]{__version__}[/cyan]")
+    console.print("[dim]iCUE widget packaging and scaffolding CLI[/dim]")
 
 
 def print_warnings(warnings: list[str]) -> None:
@@ -335,13 +275,16 @@ def validate_widget(widget_dir: Path) -> ValidationResult:
     manifest = load_json(manifest_path, label="manifest.json")
     warnings: list[str] = []
 
-    validate_required_string(manifest, "author")
-    validate_required_string(manifest, "id")
-    validate_required_string(manifest, "name")
-    validate_required_string(manifest, "description")
-    validate_required_string(manifest, "version")
-    validate_required_string(manifest, "preview_icon")
-    validate_required_string(manifest, "min_framework_version")
+    for key in [
+        "author",
+        "id",
+        "name",
+        "description",
+        "version",
+        "preview_icon",
+        "min_framework_version",
+    ]:
+        validate_required_string(manifest, key)
 
     if not IDENTIFIER_RE.fullmatch(manifest["id"]):
         raise CliError(
@@ -389,12 +332,6 @@ def validate_widget(widget_dir: Path) -> ValidationResult:
     interactive = manifest.get("interactive")
     if interactive is not None and not isinstance(interactive, bool):
         raise CliError("manifest.interactive must be a boolean when provided")
-    if interactive and not any(
-        device.get("type") == "dashboard_lcd" for device in device_entries
-    ):
-        warnings.append(
-            "manifest.interactive is true, but dashboard_lcd is not listed in supported_devices"
-        )
 
     required_plugins = manifest.get("required_plugins")
     if required_plugins is not None and (
@@ -417,9 +354,7 @@ def validate_widget(widget_dir: Path) -> ValidationResult:
                     f"manifest.modules references a missing file: {module_path}"
                 )
 
-    translation_path = widget_dir / "translation.json"
-    if translation_path.exists():
-        load_json(translation_path, label="translation.json")
+    load_json(widget_dir / "translation.json", label="translation.json")
 
     index_html = index_path.read_text(encoding="utf-8")
     if "<title>" not in index_html:
@@ -518,11 +453,17 @@ def prompt(label: str, default: str) -> str:
     return ensure_answer(result, default).strip() or default
 
 
+def prompt_required(label: str) -> str:
+    result = questionary.text(label).ask()
+    value = ensure_answer(result, "").strip()
+    if value:
+        return value
+    console.print(f"[yellow]{label} is required.[/yellow]")
+    return prompt_required(label)
+
+
 def prompt_validated(
-    label: str,
-    default: str,
-    validator: Callable[[str], bool],
-    error_message: str,
+    label: str, default: str, validator: Callable[[str], bool], error_message: str
 ) -> str:
     value = prompt(label, default)
     if validator(value):
@@ -533,72 +474,7 @@ def prompt_validated(
 
 def prompt_yes_no(label: str, default: bool) -> bool:
     result = questionary.confirm(label, default=default).ask()
-    ensured = ensure_answer(result, default)
-    return bool(ensured)
-
-
-def prompt_choice_list(label: str, allowed: list[str], default: list[str]) -> list[str]:
-    chosen = questionary.checkbox(
-        label,
-        choices=[
-            questionary.Choice(title=item, value=item, checked=item in default)
-            for item in allowed
-        ],
-    ).ask()
-    chosen = ensure_answer(chosen, default)
-    invalid = [item for item in chosen if item not in allowed]
-    if invalid:
-        console.print(f"[yellow]Invalid values:[/yellow] {', '.join(invalid)}")
-        console.print(f"Allowed values: {', '.join(allowed)}")
-        return prompt_choice_list(label, allowed, default)
-    if not chosen:
-        console.print("[yellow]At least one value is required.[/yellow]")
-        return prompt_choice_list(label, allowed, default)
-    return chosen
-
-
-def prompt_template(default: str) -> str:
-    template_table = Table(title="Available templates", show_header=True)
-    template_table.add_column("Template", style="cyan")
-    template_table.add_column("Description")
-    for name in sorted(ALLOWED_TEMPLATES):
-        template_table.add_row(name, TEMPLATE_DESCRIPTIONS[name])
-    console.print(template_table)
-    result = questionary.select(
-        "Starter template",
-        choices=[
-            questionary.Choice(
-                title=f"{name} — {TEMPLATE_DESCRIPTIONS[name]}", value=name
-            )
-            for name in sorted(ALLOWED_TEMPLATES)
-        ],
-        default=default,
-    ).ask()
-    return ensure_answer(result, default)
-
-
-def normalize_template(value: str) -> str:
-    normalized = value.strip().lower()
-    if normalized not in ALLOWED_TEMPLATES:
-        console.print(f"[yellow]Invalid template:[/yellow] {value}")
-        console.print(TEMPLATE_HELP)
-        return normalize_template(prompt_template("basic"))
-    return normalized
-
-
-def prompt_csv_list(
-    label: str, default: list[str], helper_text: str | None = None
-) -> list[str]:
-    if helper_text:
-        console.print(f"[dim]{helper_text}[/dim]")
-    raw_result = questionary.text(label, default=",".join(default)).ask()
-    raw = ensure_answer(raw_result, ",".join(default)).strip()
-    values = [item.strip() for item in raw.split(",") if item.strip()]
-    deduped: list[str] = []
-    for value in values:
-        if value not in deduped:
-            deduped.append(value)
-    return deduped
+    return bool(ensure_answer(result, default))
 
 
 def ensure_answer(value: Any | None, default: Any) -> Any:
@@ -616,13 +492,8 @@ def write_text(path: Path, content: str) -> None:
 
 
 def slugify(value: str) -> str:
-    normalized = PROPERTY_NAME_RE.sub("-", value.lower()).strip("-")
+    normalized = SLUG_RE.sub("-", value.lower()).strip("-")
     return normalized.replace("-", "")
-
-
-def title_case_from_slug(value: str) -> str:
-    parts = re.split(r"[-_\s]+", value)
-    return " ".join(part.capitalize() for part in parts if part) or "My Widget"
 
 
 def build_default_widget_id(
@@ -633,7 +504,6 @@ def build_default_widget_id(
         cleaned = [part for part in reversed(re.split(r"[^a-z0-9]+", domain)) if part]
         if cleaned:
             return ".".join([*cleaned, widget_slug])
-
     author_slug = slugify(author)
     if author_slug:
         return f"com.{author_slug}.{widget_slug}"
@@ -644,102 +514,18 @@ def build_translation_json(widget_name: str) -> str:
     payload = {
         widget_name: widget_name,
         "Settings": "Settings",
-        "Text Color": "Text Color",
-        "Hello World": "Hello World",
         "Headline": "Headline",
-        "Show Subtitle": "Show Subtitle",
         "Subtitle": "Subtitle",
-        "Waiting for Plugin": "Waiting for Plugin",
-        "Plugin Example": "Plugin Example",
-        "No Data Yet": "No Data Yet",
+        "Show Subtitle": "Show Subtitle",
+        "Text Color": "Text Color",
+        "Background Color": "Background Color",
+        "Hello World": "Hello World",
     }
     return json.dumps(payload, indent=2) + "\n"
 
 
-def build_index_html(
-    widget_name: str,
-    *,
-    template: str,
-    use_translation: bool,
-    stylesheet_path: str | None,
-) -> str:
-    if template == "settings":
-        return build_settings_template(widget_name, use_translation, stylesheet_path)
-    if template == "plugin":
-        return build_plugin_template(widget_name, use_translation, stylesheet_path)
-    return build_basic_template(widget_name, use_translation, stylesheet_path)
-
-
-def build_basic_template(
-    widget_name: str, use_translation: bool, stylesheet_path: str | None
-) -> str:
-    title = (
-        f"tr('{escape_single_quotes(widget_name)}')" if use_translation else widget_name
-    )
-    label = "tr('Text Color')" if use_translation else "Text Color"
-    group_title = "tr('Settings')" if use_translation else "Settings"
-    stylesheet = (
-        f'  <link rel="stylesheet" href="{stylesheet_path}">\n'
-        if stylesheet_path
-        else ""
-    )
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>{title}</title>
-  <link rel="icon" type="image/svg+xml" href="resources/icon.svg">
-{stylesheet}  <meta name="x-icue-property" content="textColor"
-        data-label="{label}"
-        data-type="color"
-        data-default="'#FFFFFF'">
-
-  <script type="application/json" id="x-icue-groups">
-  [{{"title": "{group_title}", "properties": ["textColor"]}}]
-  </script>
-</head>
-<body>
-  <div id="content">Hello World</div>
-
-  <script>
-    icueEvents = {{
-      "onICUEInitialized": init,
-      "onDataUpdated": update
-    }};
-
-    function init() {{
-      update();
-    }}
-
-    function update() {{
-      const color = typeof textColor !== 'undefined' ? textColor : '#FFFFFF';
-      document.getElementById('content').style.color = color;
-    }}
-
-    if (typeof iCUE_initialized !== 'undefined' && iCUE_initialized) {{
-      init();
-    }}
-  </script>
-</body>
-</html>
-"""
-
-
-def build_settings_template(
-    widget_name: str, use_translation: bool, stylesheet_path: str | None
-) -> str:
-    title = (
-        f"tr('{escape_single_quotes(widget_name)}')" if use_translation else widget_name
-    )
-    settings_title = "tr('Settings')" if use_translation else "Settings"
-    headline_label = "tr('Headline')" if use_translation else "Headline"
-    subtitle_toggle = "tr('Show Subtitle')" if use_translation else "Show Subtitle"
-    subtitle_label = "tr('Subtitle')" if use_translation else "Subtitle"
-    text_color_label = "tr('Text Color')" if use_translation else "Text Color"
-    headline_default = (
-        f"tr('{escape_single_quotes(widget_name)}')" if use_translation else widget_name
-    )
-    subtitle_default = "tr('Hello World')" if use_translation else "Hello World"
+def build_index_html(widget_name: str, *, stylesheet_path: str | None) -> str:
+    title = f"tr('{escape_single_quotes(widget_name)}')"
     stylesheet = (
         f'  <link rel="stylesheet" href="{stylesheet_path}">\n'
         if stylesheet_path
@@ -752,27 +538,32 @@ def build_settings_template(
   <title>{title}</title>
   <link rel="icon" type="image/svg+xml" href="resources/icon.svg">
 {stylesheet}  <meta name="x-icue-property" content="headline"
-        data-label="{headline_label}"
+        data-label="tr('Headline')"
         data-type="textfield"
-        data-default="{headline_default}">
+        data-default="tr('{escape_single_quotes(widget_name)}')">
 
   <meta name="x-icue-property" content="showSubtitle"
-        data-label="{subtitle_toggle}"
+        data-label="tr('Show Subtitle')"
         data-type="switch"
         data-default="true">
 
   <meta name="x-icue-property" content="subtitle"
-        data-label="{subtitle_label}"
+        data-label="tr('Subtitle')"
         data-type="textfield"
-        data-default="{subtitle_default}">
+        data-default="tr('Hello World')">
 
   <meta name="x-icue-property" content="textColor"
-        data-label="{text_color_label}"
+        data-label="tr('Text Color')"
         data-type="color"
         data-default="'#FFFFFF'">
 
+  <meta name="x-icue-property" content="backgroundColor"
+        data-label="tr('Background Color')"
+        data-type="color"
+        data-default="'#111111'">
+
   <script type="application/json" id="x-icue-groups">
-  [{{"title": "{settings_title}", "properties": ["headline", "showSubtitle", "subtitle", "textColor"]}}]
+  [{{"title": "tr('Settings')", "properties": ["headline", "showSubtitle", "subtitle", "textColor", "backgroundColor"]}}]
   </script>
 </head>
 <body>
@@ -792,100 +583,17 @@ def build_settings_template(
     }}
 
     function update() {{
-      const color = typeof textColor !== 'undefined' ? textColor : '#FFFFFF';
       const currentHeadline = typeof headline !== 'undefined' ? headline : '{escape_single_quotes(widget_name)}';
       const currentSubtitle = typeof subtitle !== 'undefined' ? subtitle : 'Hello World';
       const currentShowSubtitle = typeof showSubtitle !== 'undefined' ? showSubtitle : true;
+      const currentTextColor = typeof textColor !== 'undefined' ? textColor : '#FFFFFF';
+      const currentBackgroundColor = typeof backgroundColor !== 'undefined' ? backgroundColor : '#111111';
 
+      document.body.style.background = currentBackgroundColor;
       document.getElementById('headline').textContent = currentHeadline;
       document.getElementById('subtitle').textContent = currentSubtitle;
       document.getElementById('subtitle').style.display = currentShowSubtitle ? 'block' : 'none';
-      document.getElementById('content').style.color = color;
-    }}
-
-    if (typeof iCUE_initialized !== 'undefined' && iCUE_initialized) {{
-      init();
-    }}
-  </script>
-</body>
-</html>
-"""
-
-
-def build_plugin_template(
-    widget_name: str, use_translation: bool, stylesheet_path: str | None
-) -> str:
-    title = (
-        f"tr('{escape_single_quotes(widget_name)}')" if use_translation else widget_name
-    )
-    settings_title = "tr('Settings')" if use_translation else "Settings"
-    text_color_label = "tr('Text Color')" if use_translation else "Text Color"
-    waiting_text = (
-        "tr('Waiting for Plugin')" if use_translation else "Waiting for Plugin"
-    )
-    no_data_text = "tr('No Data Yet')" if use_translation else "No Data Yet"
-    plugin_title = "tr('Plugin Example')" if use_translation else "Plugin Example"
-    stylesheet = (
-        f'  <link rel="stylesheet" href="{stylesheet_path}">\n'
-        if stylesheet_path
-        else ""
-    )
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>{title}</title>
-  <link rel="icon" type="image/svg+xml" href="resources/icon.svg">
-{stylesheet}  <meta name="x-icue-property" content="textColor"
-        data-label="{text_color_label}"
-        data-type="color"
-        data-default="'#FFFFFF'">
-
-  <script type="application/json" id="x-icue-groups">
-  [{{"title": "{settings_title}", "properties": ["textColor"]}}]
-  </script>
-</head>
-<body>
-  <div id="content">
-    <div id="headline">{plugin_title}</div>
-    <div id="status">{waiting_text}</div>
-    <div id="value">{no_data_text}</div>
-  </div>
-
-  <script>
-    let pluginReady = false;
-
-    icueEvents = {{
-      "onICUEInitialized": init,
-      "onDataUpdated": update
-    }};
-
-    function init() {{
-      bindPlugin();
-      update();
-    }}
-
-    function bindPlugin() {{
-      const sensorsPlugin = window.plugins && window.plugins.SensorsDataProvider;
-      if (!sensorsPlugin) {{
-        setStatus('{escape_single_quotes(waiting_text)}');
-        return;
-      }}
-
-      pluginReady = true;
-      setStatus('Plugin connected');
-    }}
-
-    function update() {{
-      const color = typeof textColor !== 'undefined' ? textColor : '#FFFFFF';
-      document.getElementById('content').style.color = color;
-      if (!pluginReady) {{
-        document.getElementById('value').textContent = '{escape_single_quotes(no_data_text)}';
-      }}
-    }}
-
-    function setStatus(message) {{
-      document.getElementById('status').textContent = message;
+      document.getElementById('content').style.color = currentTextColor;
     }}
 
     if (typeof iCUE_initialized !== 'undefined' && iCUE_initialized) {{
@@ -903,7 +611,7 @@ html, body {
   margin: 0;
   width: 100%;
   height: 100%;
-  background: #000;
+  background: #111111;
   font-family: Arial, sans-serif;
 }
 
@@ -917,15 +625,16 @@ body {
   font-size: 32px;
   text-align: center;
 }
-"""
 
+#headline {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
 
-def build_starter_module(module_path: str) -> str:
-    module_name = Path(module_path).stem
-    export_name = re.sub(r"[^A-Za-z0-9_]", "_", module_name) or "widgetModule"
-    return f"""export function {export_name}() {{
-  return '{module_name}';
-}}
+#subtitle {
+  opacity: 0.8;
+  font-size: 18px;
+}
 """
 
 

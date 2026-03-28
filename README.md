@@ -10,7 +10,7 @@ The CLI uses:
 
 ## Commands
 
-- `icuewidget initiate [path]`
+- `icuewidget init [path]`
 - `icuewidget validate [path]`
 - `icuewidget package [path]`
 - `icuewidget --help`
@@ -37,37 +37,43 @@ pip install .
 
 ```bash
 python3 -m icuewidget_cli --help
-python3 -m icuewidget_cli initiate ./MyWidget
+python3 -m icuewidget_cli init ./MyWidget
 python3 -m icuewidget_cli validate ./MyWidget
 python3 -m icuewidget_cli package ./MyWidget
 ```
 
-## Starter templates
+## Generated starter widget
 
-`icuewidget initiate` can scaffold multiple starter templates:
+`icuewidget init` always scaffolds a configurable hello-world widget for:
 
-- `basic` — minimal hello-world widget
-- `settings` — hello-world widget with a few configurable properties
-- `plugin` — basic plugin-aware scaffold showing initialization flow
+- `windows`
+- `dashboard_lcd`
 
-The same template list is shown in:
+The generated widget includes example customizable properties such as:
 
-- `icuewidget initiate --help`
-- the interactive `initiate` prompt
+- headline
+- subtitle
+- show/hide subtitle
+- text color
+- background color
 
-Interactive prompts use menu-based selection where appropriate instead of plain text entry.
+The CLI always creates:
+
+- `manifest.json`
+- `index.html`
+- `translation.json`
+- `resources/icon.svg`
+- optional `styles/main.css`
 
 Examples:
 
 ```bash
-icuewidget initiate ./HelloWidget --template basic
-icuewidget initiate ./ConfigurableWidget --template settings
-icuewidget initiate ./PluginWidget --template plugin
+icuewidget init ./HelloWidget
 ```
 
 ## Widget id suggestion
 
-During `initiate`, the CLI asks for an optional organization domain and uses it to suggest a reverse-domain style widget id.
+During `init`, the CLI asks for an optional organization domain and uses it to suggest a reverse-domain style widget id.
 
 If you enter a domain like:
 
@@ -88,6 +94,8 @@ com.romangru.test
 ```
 
 You can always replace the suggested widget id with your own stable identifier.
+
+The `Widget name` and `Author` prompts do not have defaults and must be entered explicitly.
 
 ## Standalone releases
 
