@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>tr('Template Plugin')</title>
+  <link rel="icon" type="image/svg+xml" href="resources/icon.svg">
+  <link rel="stylesheet" href="styles/main.css">
+
+  <meta name="x-icue-property" content="textColor"
+        data-label="tr('Text Color')"
+        data-type="color"
+        data-default="'#FFFFFF'">
+
+  <script type="application/json" id="x-icue-groups">
+  [{"title": "tr('Settings')", "properties": ["textColor"]}]
+  </script>
+</head>
+<body>
+  <div id="content">
+    <div id="headline">tr('Plugin Example')</div>
+    <div id="status">tr('Waiting for Plugin')</div>
+    <div id="value">tr('No Data Yet')</div>
+  </div>
+
+  <script>
+    let pluginReady = false;
+
+    icueEvents = {
+      "onICUEInitialized": init,
+      "onDataUpdated": update
+    };
+
+    function init() {
+      bindPlugin();
+      update();
+    }
+
+    function bindPlugin() {
+      const sensorsPlugin = window.plugins && window.plugins.SensorsDataProvider;
+      if (!sensorsPlugin) {
+        setStatus('tr(\'Waiting for Plugin\')');
+        return;
+      }
+
+      pluginReady = true;
+      setStatus('Plugin connected');
+    }
+
+    function update() {
+      const color = typeof textColor !== 'undefined' ? textColor : '#FFFFFF';
+      document.getElementById('content').style.color = color;
+      if (!pluginReady) {
+        document.getElementById('value').textContent = 'tr(\'No Data Yet\')';
+      }
+    }
+
+    function setStatus(message) {
+      document.getElementById('status').textContent = message;
+    }
+
+    if (typeof iCUE_initialized !== 'undefined' && iCUE_initialized) {
+      init();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>tr('Template Settings')</title>
+  <link rel="icon" type="image/svg+xml" href="resources/icon.svg">
+  <link rel="stylesheet" href="styles/main.css">
+
+  <meta name="x-icue-property" content="headline"
+        data-label="tr('Headline')"
+        data-type="textfield"
+        data-default="tr('Template Settings')">
+
+  <meta name="x-icue-property" content="showSubtitle"
+        data-label="tr('Show Subtitle')"
+        data-type="switch"
+        data-default="true">
+
+  <meta name="x-icue-property" content="subtitle"
+        data-label="tr('Subtitle')"
+        data-type="textfield"
+        data-default="tr('Hello World')">
+
+  <meta name="x-icue-property" content="textColor"
+        data-label="tr('Text Color')"
+        data-type="color"
+        data-default="'#FFFFFF'">
+
+  <script type="application/json" id="x-icue-groups">
+  [{"title": "tr('Settings')", "properties": ["headline", "showSubtitle", "subtitle", "textColor"]}]
+  </script>
+</head>
+<body>
+  <div id="content">
+    <div id="headline">Template Settings</div>
+    <div id="subtitle">Hello World</div>
+  </div>
+
+  <script>
+    icueEvents = {
+      "onICUEInitialized": init,
+      "onDataUpdated": update
+    };
+
+    function init() {
+      update();
+    }
+
+    function update() {
+      const color = typeof textColor !== 'undefined' ? textColor : '#FFFFFF';
+      const currentHeadline = typeof headline !== 'undefined' ? headline : 'Template Settings';
+      const currentSubtitle = typeof subtitle !== 'undefined' ? subtitle : 'Hello World';
+      const currentShowSubtitle = typeof showSubtitle !== 'undefined' ? showSubtitle : true;
+
+      document.getElementById('headline').textContent = currentHeadline;
+      document.getElementById('subtitle').textContent = currentSubtitle;
+      document.getElementById('subtitle').style.display = currentShowSubtitle ? 'block' : 'none';
+      document.getElementById('content').style.color = color;
+    }
+
+    if (typeof iCUE_initialized !== 'undefined' && iCUE_initialized) {
+      init();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "icuewidget-cli"
+version = "0.1.0"
+description = "CLI for creating and packaging iCUE widgets"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "Corsair Team" }
+]
+license = { text = "Proprietary" }
+scripts = { icuewidget = "icuewidget_cli.cli:main" }
+
+[project.optional-dependencies]
+build = [
+  "pyinstaller>=6.0"
+]
+
+[tool.setuptools]
+packages = ["icuewidget_cli"]
+
+[tool.pyinstaller]
+console = true
