@@ -1,0 +1,105 @@
+Metadata-Version: 2.4
+Name: icuewidget-cli
+Version: 0.2.0
+Summary: CLI for creating and packaging iCUE widgets
+Author: Corsair Team
+License: Proprietary
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: questionary<3.0,>=2.0
+Requires-Dist: typer<1.0,>=0.12
+Requires-Dist: rich<14.0,>=13.7
+Provides-Extra: build
+Requires-Dist: pyinstaller>=6.0; extra == "build"
+
+# icuewidget CLI
+
+This repository contains the `icuewidget` command-line tool for creating, validating, and packaging iCUE widgets.
+
+The CLI uses:
+
+- `Typer` for command structure
+- `Rich` for polished help and output
+- `Questionary` for interactive scaffolding prompts
+
+## Commands
+
+- `icuewidget initiate [path]`
+- `icuewidget validate [path]`
+- `icuewidget package [path]`
+- `icuewidget --help`
+- `icuewidget --version`
+
+## Contents
+
+```text
+icuewidget_cli/
+bin/
+.github/workflows/
+docs/
+pyproject.toml
+build_standalone.py
+```
+
+## Install from source
+
+```bash
+pip install .
+```
+
+## Run locally without installing
+
+```bash
+python3 -m icuewidget_cli --help
+python3 -m icuewidget_cli initiate ./MyWidget
+python3 -m icuewidget_cli validate ./MyWidget
+python3 -m icuewidget_cli package ./MyWidget
+```
+
+## Starter templates
+
+`icuewidget initiate` can scaffold multiple starter templates:
+
+- `basic` — minimal hello-world widget
+- `settings` — hello-world widget with a few configurable properties
+- `plugin` — basic plugin-aware scaffold showing initialization flow
+
+The same template list is shown in:
+
+- `icuewidget initiate --help`
+- the interactive `initiate` prompt
+
+Interactive prompts use menu-based selection where appropriate instead of plain text entry.
+
+Examples:
+
+```bash
+icuewidget initiate ./HelloWidget --template basic
+icuewidget initiate ./ConfigurableWidget --template settings
+icuewidget initiate ./PluginWidget --template plugin
+```
+
+## Widget id suggestion
+
+During `initiate`, the CLI suggests a reverse-domain style widget id using this pattern:
+
+```text
+com.<author>.widget.<widgetname>
+```
+
+For example:
+
+```text
+com.johndoe.widget.cpumonitor
+```
+
+You can accept the default or replace it with your own stable reverse-domain identifier.
+
+## Standalone releases
+
+This repo includes release packaging for standalone macOS and Windows binaries.
+
+See:
+
+- `docs/CLI_Release_Packaging.md`
+- `docs/CLI_Code_Signing_And_Notarization.md`

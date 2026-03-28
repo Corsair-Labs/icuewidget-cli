@@ -2,6 +2,12 @@
 
 This repository contains the `icuewidget` command-line tool for creating, validating, and packaging iCUE widgets.
 
+The CLI uses:
+
+- `Typer` for command structure
+- `Rich` for polished help and output
+- `Questionary` for interactive scaffolding prompts
+
 ## Commands
 
 - `icuewidget initiate [path]`
@@ -44,6 +50,13 @@ python3 -m icuewidget_cli package ./MyWidget
 - `settings` — hello-world widget with a few configurable properties
 - `plugin` — basic plugin-aware scaffold showing initialization flow
 
+The same template list is shown in:
+
+- `icuewidget initiate --help`
+- the interactive `initiate` prompt
+
+Interactive prompts use menu-based selection where appropriate instead of plain text entry.
+
 Examples:
 
 ```bash
@@ -51,6 +64,22 @@ icuewidget initiate ./HelloWidget --template basic
 icuewidget initiate ./ConfigurableWidget --template settings
 icuewidget initiate ./PluginWidget --template plugin
 ```
+
+## Widget id suggestion
+
+During `initiate`, the CLI suggests a reverse-domain style widget id using this pattern:
+
+```text
+com.<author>.widget.<widgetname>
+```
+
+For example:
+
+```text
+com.johndoe.widget.cpumonitor
+```
+
+You can accept the default or replace it with your own stable reverse-domain identifier.
 
 ## Standalone releases
 

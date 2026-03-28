@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+icuewidget_cli/__init__.py
+icuewidget_cli/__main__.py
+icuewidget_cli/cli.py
+icuewidget_cli.egg-info/PKG-INFO
+icuewidget_cli.egg-info/SOURCES.txt
+icuewidget_cli.egg-info/dependency_links.txt
+icuewidget_cli.egg-info/entry_points.txt
+icuewidget_cli.egg-info/requires.txt
+icuewidget_cli.egg-info/top_level.txt

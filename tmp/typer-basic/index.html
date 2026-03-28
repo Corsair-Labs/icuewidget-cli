@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>tr('Typer Basic')</title>
+  <link rel="icon" type="image/svg+xml" href="resources/icon.svg">
+  <link rel="stylesheet" href="styles/main.css">
+  <meta name="x-icue-property" content="textColor"
+        data-label="tr('Text Color')"
+        data-type="color"
+        data-default="'#FFFFFF'">
+
+  <script type="application/json" id="x-icue-groups">
+  [{"title": "tr('Settings')", "properties": ["textColor"]}]
+  </script>
+</head>
+<body>
+  <div id="content">Hello World</div>
+
+  <script>
+    icueEvents = {
+      "onICUEInitialized": init,
+      "onDataUpdated": update
+    };
+
+    function init() {
+      update();
+    }
+
+    function update() {
+      const color = typeof textColor !== 'undefined' ? textColor : '#FFFFFF';
+      document.getElementById('content').style.color = color;
+    }
+
+    if (typeof iCUE_initialized !== 'undefined' && iCUE_initialized) {
+      init();
+    }
+  </script>
+</body>
+</html>

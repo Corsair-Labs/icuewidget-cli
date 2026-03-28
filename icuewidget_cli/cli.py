@@ -1,24 +1,53 @@
 from __future__ import annotations
 
-import argparse
 import json
 import re
-import sys
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, NoReturn
+
+import questionary
+import typer
+from rich.console import Console
+from rich.panel import Panel
+from rich.rule import Rule
+from rich.table import Table
 
 from . import __version__
 
 APP_NAME = "icuewidget"
 DEFAULT_FRAMEWORK_VERSION = "1.0.0"
-ALLOWED_PLATFORMS = {"windows", "mac"}
+ALLOWED_PLATFORMS = {"windows"}
 ALLOWED_DEVICE_TYPES = {"dashboard_lcd", "pump_lcd", "keyboard_lcd"}
 ALLOWED_TEMPLATES = {"basic", "settings", "plugin"}
+TEMPLATE_DESCRIPTIONS = {
+    "basic": "Minimal hello-world widget",
+    "settings": "Widget with example configurable properties",
+    "plugin": "Widget with basic plugin initialization flow",
+}
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9.-]+$")
 PROPERTY_NAME_RE = re.compile(r"[^a-z0-9]+")
+
+console = Console()
+app = typer.Typer(
+    name=APP_NAME,
+    no_args_is_help=True,
+    add_completion=False,
+    rich_markup_mode="rich",
+    help="Create, validate, and package iCUE widgets.",
+    epilog=(
+        "Examples:\n"
+        "  icuewidget initiate ./HelloWidget --template basic\n"
+        "  icuewidget validate ./HelloWidget\n"
+        "  icuewidget package ./HelloWidget"
+    ),
+)
+
+TEMPLATE_HELP = "Starter template to scaffold.\n" + "\n".join(
+    f"- {name}: {TEMPLATE_DESCRIPTIONS[name]}" for name in sorted(ALLOWED_TEMPLATES)
+)
 
 
 class CliError(Exception):
@@ -32,122 +61,66 @@ class ValidationResult:
 
 
 def print_header() -> None:
-    print(f"{APP_NAME} {__version__}")
-    print("iCUE widget packaging and scaffolding CLI")
+    console.print(f"[bold]{APP_NAME}[/bold] [cyan]{__version__}[/cyan]")
+    console.print("[dim]iCUE widget packaging and scaffolding CLI[/dim]")
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog=APP_NAME,
-        description="Create, validate, and package iCUE widgets.",
-    )
-    parser.add_argument(
-        "--version", action="store_true", help="Show the CLI version and exit"
-    )
-
-    subparsers = parser.add_subparsers(dest="command")
-
-    validate_parser = subparsers.add_parser(
-        "validate",
-        help="Validate a widget directory",
-        description="Validate a widget directory without generating a package.",
-    )
-    validate_parser.add_argument(
-        "path",
-        nargs="?",
-        default=".",
-        help="Path to the widget directory (default: current directory)",
-    )
-
-    package_parser = subparsers.add_parser(
-        "package",
-        help="Validate a widget and generate a .icuewidget package",
-        description="Validate a widget directory and generate a .icuewidget archive.",
-    )
-    package_parser.add_argument(
-        "path",
-        nargs="?",
-        default=".",
-        help="Path to the widget directory (default: current directory)",
-    )
-    package_parser.add_argument(
-        "-o",
-        "--output",
-        help="Output .icuewidget file path (default: sibling file named after manifest id)",
-    )
-
-    initiate_parser = subparsers.add_parser(
-        "initiate",
-        help="Interactively scaffold a new widget",
-        description="Create a basic iCUE widget structure and interactively generate manifest.json.",
-    )
-    initiate_parser.add_argument(
-        "path",
-        nargs="?",
-        default=".",
-        help="Target directory for the widget scaffold (default: current directory)",
-    )
-    initiate_parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Allow scaffolding into a non-empty directory",
-    )
-    initiate_parser.add_argument(
-        "--template",
-        choices=sorted(ALLOWED_TEMPLATES),
-        help="Starter template to scaffold (basic, settings, plugin)",
-    )
-
-    return parser
+def main() -> None:
+    app()
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
-
-    if args.version:
+@app.callback(invoke_without_command=True)
+def callback(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        help="Show the CLI version and exit",
+        is_eager=True,
+        rich_help_panel="Global Options",
+    ),
+) -> None:
+    if version:
         print_header()
-        return 0
-
-    if args.command == "validate":
-        return command_validate(args)
-
-    if args.command == "package":
-        return command_package(args)
-
-    if args.command == "initiate":
-        return command_initiate(args)
-
-    parser.print_help()
-    return 0
+        raise typer.Exit()
 
 
-def command_validate(args: argparse.Namespace) -> int:
-    widget_dir = resolve_widget_dir(args.path)
+@app.command("validate")
+def validate_command(
+    path: str = typer.Argument(".", help="Path to the widget directory."),
+) -> None:
+    widget_dir = resolve_widget_dir(path)
     result = run_validation(widget_dir)
 
     print_header()
-    print()
-    print("Validation passed")
-    print(f"  Widget: {result.manifest['name']}")
-    print(f"  Id: {result.manifest['id']}")
-    print(f"  Version: {result.manifest['version']}")
-    print(f"  Path: {widget_dir}")
-    if result.warnings:
-        print()
-        print("Warnings:")
-        for warning in result.warnings:
-            print(f"  - {warning}")
-    return 0
+    console.print()
+    console.print(Panel.fit("[green]Validation passed[/green]", border_style="green"))
+
+    table = Table(show_header=False, box=None, pad_edge=False)
+    table.add_row("Widget", str(result.manifest["name"]))
+    table.add_row("Id", str(result.manifest["id"]))
+    table.add_row("Version", str(result.manifest["version"]))
+    table.add_row("Path", str(widget_dir))
+    console.print(table)
+    print_warnings(result.warnings)
 
 
-def command_package(args: argparse.Namespace) -> int:
-    widget_dir = resolve_widget_dir(args.path)
+@app.command("package")
+def package_command(
+    path: str = typer.Argument(".", help="Path to the widget directory."),
+    output: str | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output .icuewidget file path (defaults to a sibling file named after manifest id).",
+        rich_help_panel="Packaging Options",
+    ),
+) -> None:
+    widget_dir = resolve_widget_dir(path)
     result = run_validation(widget_dir)
 
     output_path = (
-        Path(args.output).expanduser().resolve()
-        if args.output
+        Path(output).expanduser().resolve()
+        if output
         else default_output_path(widget_dir, result.manifest)
     )
     if output_path.suffix != ".icuewidget":
@@ -156,45 +129,58 @@ def command_package(args: argparse.Namespace) -> int:
     create_package(widget_dir, output_path)
 
     print_header()
-    print()
-    print("Package created successfully")
-    print(f"  Widget: {result.manifest['name']}")
-    print(f"  Source: {widget_dir}")
-    print(f"  Output: {output_path}")
-    if result.warnings:
-        print()
-        print("Warnings:")
-        for warning in result.warnings:
-            print(f"  - {warning}")
-    return 0
+    console.print()
+    console.print(
+        Panel.fit("[green]Package created successfully[/green]", border_style="green")
+    )
+
+    table = Table(show_header=False, box=None, pad_edge=False)
+    table.add_row("Widget", str(result.manifest["name"]))
+    table.add_row("Source", str(widget_dir))
+    table.add_row("Output", str(output_path))
+    console.print(table)
+    print_warnings(result.warnings)
 
 
-def command_initiate(args: argparse.Namespace) -> int:
-    target_dir = Path(args.path).expanduser().resolve()
+@app.command("initiate")
+def initiate_command(
+    path: str = typer.Argument(".", help="Target directory for the widget scaffold."),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Allow scaffolding into a non-empty directory.",
+        rich_help_panel="Scaffolding Options",
+    ),
+    template: str | None = typer.Option(
+        None,
+        "--template",
+        help=TEMPLATE_HELP,
+        case_sensitive=False,
+        rich_help_panel="Scaffolding Options",
+    ),
+) -> None:
+    target_dir = Path(path).expanduser().resolve()
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    if not args.force and any(target_dir.iterdir()):
-        print(f"Error: target directory is not empty: {target_dir}", file=sys.stderr)
-        print("Use --force to scaffold into a non-empty directory.", file=sys.stderr)
-        return 1
+    if not force and any(target_dir.iterdir()):
+        raise_cli_error(
+            f"Target directory is not empty: {target_dir}\nUse --force to scaffold into a non-empty directory."
+        )
 
     print_header()
-    print()
-    print("Interactive widget initialization")
-    print("Press Enter to accept defaults shown in brackets.")
-    print()
+    console.print()
+    console.print(Panel.fit("Interactive widget initialization", border_style="blue"))
+    console.print("[dim]Use arrows, space, and Enter where menus are shown.[/dim]")
+    console.print(Rule(style="blue"))
 
     directory_name = target_dir.name if target_dir.name else "my-widget"
     suggested_name = title_case_from_slug(directory_name)
     widget_name = prompt("Widget name", suggested_name)
-    template = args.template or prompt_choice(
-        "Starter template",
-        ["basic", "settings", "plugin"],
-        "basic",
-    )
+    selected_template = normalize_template(template or prompt_template("basic"))
+
     slug = slugify(widget_name) or slugify(directory_name) or "mywidget"
     author = prompt("Author", "Your Name")
-    reverse_domain = prompt("Reverse-domain prefix", "com.example")
+    reverse_domain = prompt("Organization domain", build_default_reverse_domain(author))
     widget_id = prompt_validated(
         "Widget id",
         f"{reverse_domain}.{slug}",
@@ -215,32 +201,31 @@ def command_initiate(args: argparse.Namespace) -> int:
         "Use semantic version format like 1.0.0.",
     )
     preview_icon = prompt("Preview icon path", "resources/icon.svg")
-    platforms = prompt_choice_list("Platforms", ["windows", "mac"], ["windows", "mac"])
-    devices = prompt_choice_list(
-        "Supported devices",
-        ["dashboard_lcd", "pump_lcd", "keyboard_lcd"],
-        ["dashboard_lcd"],
-    )
+
+    devices = ["dashboard_lcd"]
     interactive = prompt_yes_no("Interactive widget", False)
-    touch_features = []
-    if interactive and "dashboard_lcd" in devices:
+    touch_features: list[str] = []
+    if interactive:
         touch_features = prompt_choice_list(
             "Dashboard features",
             ["sensor-screen"],
             ["sensor-screen"],
         )
-    required_plugins = prompt_csv_list(
-        "Required plugins",
-        [],
-        "Comma-separated plugin ids, or leave blank for none.",
-    )
-    if template == "plugin" and not required_plugins:
-        required_plugins = ["SensorsDataProvider"]
-    modules = prompt_csv_list(
-        "JavaScript modules",
-        [],
-        "Comma-separated module file paths relative to the widget root, or leave blank for none.",
-    )
+
+    required_plugins: list[str] = []
+    modules: list[str] = []
+    if selected_template == "plugin":
+        required_plugins = prompt_csv_list(
+            "Required plugins",
+            ["SensorsDataProvider"],
+            "Comma-separated plugin ids, or leave blank to accept the default plugin example.",
+        )
+        modules = prompt_csv_list(
+            "JavaScript modules",
+            [],
+            "Comma-separated module file paths relative to the widget root, or leave blank for none.",
+        )
+
     create_translation = prompt_yes_no("Create translation.json", True)
     create_starter_stylesheet = prompt_yes_no("Create styles/main.css", True)
 
@@ -259,7 +244,7 @@ def command_initiate(args: argparse.Namespace) -> int:
         "version": version,
         "preview_icon": preview_icon,
         "min_framework_version": min_framework_version,
-        "os": [{"platform": platform} for platform in platforms],
+        "os": [{"platform": "windows"}],
         "supported_devices": supported_devices,
     }
     if interactive:
@@ -279,7 +264,7 @@ def command_initiate(args: argparse.Namespace) -> int:
         target_dir / "index.html",
         build_index_html(
             widget_name,
-            template=template,
+            template=selected_template,
             use_translation=create_translation,
             stylesheet_path="styles/main.css" if create_starter_stylesheet else None,
         ),
@@ -296,27 +281,46 @@ def command_initiate(args: argparse.Namespace) -> int:
         file_path.parent.mkdir(parents=True, exist_ok=True)
         write_text(file_path, build_starter_module(module_path))
 
-    print()
-    print("Widget scaffold created")
-    print(f"  Directory: {target_dir}")
-    print(f"  Template: {template}")
-    print("  Files:")
-    print("    - manifest.json")
-    print("    - index.html")
-    print("    - resources/icon.svg")
+    console.print()
+    console.print(
+        Panel.fit("[green]Widget scaffold created[/green]", border_style="green")
+    )
+
+    files_table = Table(title="Generated files")
+    files_table.add_column("File")
+    files_table.add_column("Path")
+    files_table.add_row("manifest.json", str(target_dir / "manifest.json"))
+    files_table.add_row("index.html", str(target_dir / "index.html"))
+    files_table.add_row("icon.svg", str(resources_dir / "icon.svg"))
     if create_translation:
-        print("    - translation.json")
+        files_table.add_row("translation.json", str(target_dir / "translation.json"))
     if create_starter_stylesheet:
-        print("    - styles/main.css")
+        files_table.add_row("styles/main.css", str(target_dir / "styles" / "main.css"))
     for module_path in modules:
-        print(f"    - {module_path}")
-    print()
-    print("Next steps:")
-    print(f"  1. Edit {target_dir / 'index.html'}")
-    print(f"  2. Customize {target_dir / 'resources' / 'icon.svg'}")
-    print(f"  3. Run `{APP_NAME} validate {target_dir}`")
-    print(f"  4. Run `{APP_NAME} package {target_dir}` when ready")
-    return 0
+        files_table.add_row(module_path, str(target_dir / module_path))
+    console.print(files_table)
+
+    summary_table = Table(show_header=False, box=None, pad_edge=False)
+    summary_table.add_row("Directory", str(target_dir))
+    summary_table.add_row("Template", selected_template)
+    summary_table.add_row("Widget id", widget_id)
+    console.print(summary_table)
+
+    next_steps = Table(show_header=False, box=None, pad_edge=False)
+    next_steps.add_row("1.", f"Edit {target_dir / 'index.html'}")
+    next_steps.add_row("2.", f"Customize {resources_dir / 'icon.svg'}")
+    next_steps.add_row("3.", f"Run `{APP_NAME} validate {target_dir}`")
+    next_steps.add_row("4.", f"Run `{APP_NAME} package {target_dir}` when ready")
+    console.print(Panel.fit(next_steps, title="Next steps", border_style="cyan"))
+
+
+def print_warnings(warnings: list[str]) -> None:
+    if not warnings:
+        return
+    console.print()
+    console.print(Panel.fit("[yellow]Warnings[/yellow]", border_style="yellow"))
+    for warning in warnings:
+        console.print(f"- {warning}")
 
 
 def validate_widget(widget_dir: Path) -> ValidationResult:
@@ -374,13 +378,13 @@ def validate_widget(widget_dir: Path) -> ValidationResult:
                 f"manifest.supported_devices[{index}].type must be one of: {', '.join(sorted(ALLOWED_DEVICE_TYPES))}"
             )
         features = entry.get("features")
-        if features is not None:
-            if not isinstance(features, list) or not all(
-                isinstance(item, str) and item for item in features
-            ):
-                raise CliError(
-                    f"manifest.supported_devices[{index}].features must be an array of strings"
-                )
+        if features is not None and (
+            not isinstance(features, list)
+            or not all(isinstance(item, str) and item for item in features)
+        ):
+            raise CliError(
+                f"manifest.supported_devices[{index}].features must be an array of strings"
+            )
 
     interactive = manifest.get("interactive")
     if interactive is not None and not isinstance(interactive, bool):
@@ -393,13 +397,13 @@ def validate_widget(widget_dir: Path) -> ValidationResult:
         )
 
     required_plugins = manifest.get("required_plugins")
-    if required_plugins is not None:
-        if not isinstance(required_plugins, list) or not all(
-            isinstance(item, str) and item.strip() for item in required_plugins
-        ):
-            raise CliError(
-                "manifest.required_plugins must be an array of non-empty strings"
-            )
+    if required_plugins is not None and (
+        not isinstance(required_plugins, list)
+        or not all(isinstance(item, str) and item.strip() for item in required_plugins)
+    ):
+        raise CliError(
+            "manifest.required_plugins must be an array of non-empty strings"
+        )
 
     modules = manifest.get("modules")
     if modules is not None:
@@ -455,14 +459,13 @@ def should_skip_file(file_path: Path, output_path: Path) -> bool:
 
 
 def default_output_path(widget_dir: Path, manifest: dict[str, Any]) -> Path:
-    package_name = manifest["id"]
-    return widget_dir.parent / f"{package_name}.icuewidget"
+    return widget_dir.parent / f"{manifest['id']}.icuewidget"
 
 
 def resolve_widget_dir(path_value: str) -> Path:
     widget_dir = Path(path_value).expanduser().resolve()
     if not widget_dir.exists() or not widget_dir.is_dir():
-        raise SystemExit(f"Error: widget directory not found: {widget_dir}")
+        raise_cli_error(f"Widget directory not found: {widget_dir}")
     return widget_dir
 
 
@@ -470,8 +473,12 @@ def run_validation(widget_dir: Path) -> ValidationResult:
     try:
         return validate_widget(widget_dir)
     except CliError as exc:
-        print(f"Validation failed: {exc}", file=sys.stderr)
-        raise SystemExit(1) from exc
+        raise_cli_error(f"Validation failed: {exc}")
+
+
+def raise_cli_error(message: str) -> NoReturn:
+    console.print(f"[red]Error:[/red] {message}")
+    raise typer.Exit(code=1)
 
 
 def load_json(path: Path, *, label: str) -> dict[str, Any]:
@@ -504,8 +511,8 @@ def validate_identifier(value: str) -> bool:
 
 
 def prompt(label: str, default: str) -> str:
-    raw = input(f"{label} [{default}]: ").strip()
-    return raw or default
+    result = questionary.text(label, default=default).ask()
+    return ensure_answer(result, default).strip() or default
 
 
 def prompt_validated(
@@ -517,65 +524,84 @@ def prompt_validated(
     value = prompt(label, default)
     if validator(value):
         return value
-    print(error_message)
+    console.print(f"[yellow]{error_message}[/yellow]")
     return prompt_validated(label, default, validator, error_message)
 
 
 def prompt_yes_no(label: str, default: bool) -> bool:
-    suffix = "Y/n" if default else "y/N"
-    raw = input(f"{label} [{suffix}]: ").strip().lower()
-    if not raw:
-        return default
-    if raw in {"y", "yes"}:
-        return True
-    if raw in {"n", "no"}:
-        return False
-    print("Please answer yes or no.")
-    return prompt_yes_no(label, default)
+    result = questionary.confirm(label, default=default).ask()
+    ensured = ensure_answer(result, default)
+    return bool(ensured)
 
 
 def prompt_choice_list(label: str, allowed: list[str], default: list[str]) -> list[str]:
-    prompt_text = ",".join(default)
-    raw = input(f"{label} [{prompt_text}]: ").strip()
-    chosen = [
-        item.strip() for item in (raw.split(",") if raw else default) if item.strip()
-    ]
+    chosen = questionary.checkbox(
+        label,
+        choices=[
+            questionary.Choice(title=item, value=item, checked=item in default)
+            for item in allowed
+        ],
+    ).ask()
+    chosen = ensure_answer(chosen, default)
     invalid = [item for item in chosen if item not in allowed]
     if invalid:
-        print(f"Invalid values: {', '.join(invalid)}")
-        print(f"Allowed values: {', '.join(allowed)}")
+        console.print(f"[yellow]Invalid values:[/yellow] {', '.join(invalid)}")
+        console.print(f"Allowed values: {', '.join(allowed)}")
         return prompt_choice_list(label, allowed, default)
     if not chosen:
-        print("At least one value is required.")
+        console.print("[yellow]At least one value is required.[/yellow]")
         return prompt_choice_list(label, allowed, default)
     return chosen
 
 
-def prompt_choice(label: str, allowed: list[str], default: str) -> str:
-    raw = input(f"{label} [{default}]: ").strip()
-    choice = raw or default
-    if choice not in allowed:
-        print(f"Invalid value: {choice}")
-        print(f"Allowed values: {', '.join(allowed)}")
-        return prompt_choice(label, allowed, default)
-    return choice
+def prompt_template(default: str) -> str:
+    template_table = Table(title="Available templates", show_header=True)
+    template_table.add_column("Template", style="cyan")
+    template_table.add_column("Description")
+    for name in sorted(ALLOWED_TEMPLATES):
+        template_table.add_row(name, TEMPLATE_DESCRIPTIONS[name])
+    console.print(template_table)
+    result = questionary.select(
+        "Starter template",
+        choices=[
+            questionary.Choice(
+                title=f"{name} — {TEMPLATE_DESCRIPTIONS[name]}", value=name
+            )
+            for name in sorted(ALLOWED_TEMPLATES)
+        ],
+        default=default,
+    ).ask()
+    return ensure_answer(result, default)
+
+
+def normalize_template(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized not in ALLOWED_TEMPLATES:
+        console.print(f"[yellow]Invalid template:[/yellow] {value}")
+        console.print(TEMPLATE_HELP)
+        return normalize_template(prompt_template("basic"))
+    return normalized
 
 
 def prompt_csv_list(
     label: str, default: list[str], helper_text: str | None = None
 ) -> list[str]:
-    default_text = ",".join(default)
     if helper_text:
-        print(helper_text)
-    raw = input(f"{label} [{default_text}]: ").strip()
-    values = [
-        item.strip() for item in (raw.split(",") if raw else default) if item.strip()
-    ]
+        console.print(f"[dim]{helper_text}[/dim]")
+    raw_result = questionary.text(label, default=",".join(default)).ask()
+    raw = ensure_answer(raw_result, ",".join(default)).strip()
+    values = [item.strip() for item in raw.split(",") if item.strip()]
     deduped: list[str] = []
     for value in values:
         if value not in deduped:
             deduped.append(value)
     return deduped
+
+
+def ensure_answer(value: Any | None, default: Any) -> Any:
+    if value is None:
+        return default
+    return value
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -594,6 +620,11 @@ def slugify(value: str) -> str:
 def title_case_from_slug(value: str) -> str:
     parts = re.split(r"[-_\s]+", value)
     return " ".join(part.capitalize() for part in parts if part) or "My Widget"
+
+
+def build_default_reverse_domain(author: str) -> str:
+    author_slug = slugify(author)
+    return f"com.{author_slug}.widget" if author_slug else "com.example.widget"
 
 
 def build_translation_json(widget_name: str) -> str:
@@ -623,14 +654,11 @@ def build_index_html(
         return build_settings_template(widget_name, use_translation, stylesheet_path)
     if template == "plugin":
         return build_plugin_template(widget_name, use_translation, stylesheet_path)
-
     return build_basic_template(widget_name, use_translation, stylesheet_path)
 
 
 def build_basic_template(
-    widget_name: str,
-    use_translation: bool,
-    stylesheet_path: str | None,
+    widget_name: str, use_translation: bool, stylesheet_path: str | None
 ) -> str:
     title = (
         f"tr('{escape_single_quotes(widget_name)}')" if use_translation else widget_name
@@ -648,8 +676,7 @@ def build_basic_template(
   <meta charset="UTF-8">
   <title>{title}</title>
   <link rel="icon" type="image/svg+xml" href="resources/icon.svg">
-{stylesheet}
-  <meta name="x-icue-property" content="textColor"
+{stylesheet}  <meta name="x-icue-property" content="textColor"
         data-label="{label}"
         data-type="color"
         data-default="'#FFFFFF'">
@@ -686,9 +713,7 @@ def build_basic_template(
 
 
 def build_settings_template(
-    widget_name: str,
-    use_translation: bool,
-    stylesheet_path: str | None,
+    widget_name: str, use_translation: bool, stylesheet_path: str | None
 ) -> str:
     title = (
         f"tr('{escape_single_quotes(widget_name)}')" if use_translation else widget_name
@@ -697,23 +722,23 @@ def build_settings_template(
     headline_label = "tr('Headline')" if use_translation else "Headline"
     subtitle_toggle = "tr('Show Subtitle')" if use_translation else "Show Subtitle"
     subtitle_label = "tr('Subtitle')" if use_translation else "Subtitle"
+    text_color_label = "tr('Text Color')" if use_translation else "Text Color"
+    headline_default = (
+        f"tr('{escape_single_quotes(widget_name)}')" if use_translation else widget_name
+    )
+    subtitle_default = "tr('Hello World')" if use_translation else "Hello World"
     stylesheet = (
         f'  <link rel="stylesheet" href="{stylesheet_path}">\n'
         if stylesheet_path
         else ""
     )
-    headline_default = (
-        f"tr('{escape_single_quotes(widget_name)}')" if use_translation else widget_name
-    )
-    subtitle_default = "tr('Hello World')" if use_translation else "Hello World"
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>{title}</title>
   <link rel="icon" type="image/svg+xml" href="resources/icon.svg">
-{stylesheet}
-  <meta name="x-icue-property" content="headline"
+{stylesheet}  <meta name="x-icue-property" content="headline"
         data-label="{headline_label}"
         data-type="textfield"
         data-default="{headline_default}">
@@ -729,7 +754,7 @@ def build_settings_template(
         data-default="{subtitle_default}">
 
   <meta name="x-icue-property" content="textColor"
-        data-label="{"tr('Text Color')" if use_translation else "Text Color"}"
+        data-label="{text_color_label}"
         data-type="color"
         data-default="'#FFFFFF'">
 
@@ -775,33 +800,31 @@ def build_settings_template(
 
 
 def build_plugin_template(
-    widget_name: str,
-    use_translation: bool,
-    stylesheet_path: str | None,
+    widget_name: str, use_translation: bool, stylesheet_path: str | None
 ) -> str:
     title = (
         f"tr('{escape_single_quotes(widget_name)}')" if use_translation else widget_name
     )
     settings_title = "tr('Settings')" if use_translation else "Settings"
-    stylesheet = (
-        f'  <link rel="stylesheet" href="{stylesheet_path}">\n'
-        if stylesheet_path
-        else ""
-    )
+    text_color_label = "tr('Text Color')" if use_translation else "Text Color"
     waiting_text = (
         "tr('Waiting for Plugin')" if use_translation else "Waiting for Plugin"
     )
     no_data_text = "tr('No Data Yet')" if use_translation else "No Data Yet"
     plugin_title = "tr('Plugin Example')" if use_translation else "Plugin Example"
+    stylesheet = (
+        f'  <link rel="stylesheet" href="{stylesheet_path}">\n'
+        if stylesheet_path
+        else ""
+    )
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>{title}</title>
   <link rel="icon" type="image/svg+xml" href="resources/icon.svg">
-{stylesheet}
-  <meta name="x-icue-property" content="textColor"
-        data-label="{"tr('Text Color')" if use_translation else "Text Color"}"
+{stylesheet}  <meta name="x-icue-property" content="textColor"
+        data-label="{text_color_label}"
         data-type="color"
         data-default="'#FFFFFF'">
 

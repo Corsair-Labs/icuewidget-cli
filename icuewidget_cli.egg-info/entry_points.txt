@@ -1,0 +1,2 @@
+[console_scripts]
+icuewidget = icuewidget_cli.cli:main
