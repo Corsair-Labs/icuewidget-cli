@@ -67,19 +67,27 @@ icuewidget initiate ./PluginWidget --template plugin
 
 ## Widget id suggestion
 
-During `initiate`, the CLI suggests a reverse-domain style widget id using this pattern:
+During `initiate`, the CLI asks for an optional organization domain and uses it to suggest a reverse-domain style widget id.
+
+If you enter a domain like:
 
 ```text
-com.<author>.widget.<widgetname>
+domain.com
 ```
 
-For example:
+and the widget name slug is `test`, the default widget id becomes:
 
 ```text
-com.johndoe.widget.cpumonitor
+com.domain.test
 ```
 
-You can accept the default or replace it with your own stable reverse-domain identifier.
+If you leave the domain blank, the CLI falls back to the author name. For example, author `Roman Gru` with widget slug `test` becomes:
+
+```text
+com.romangru.test
+```
+
+You can always replace the suggested widget id with your own stable identifier.
 
 ## Standalone releases
 

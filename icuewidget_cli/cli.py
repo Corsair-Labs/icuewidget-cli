@@ -180,10 +180,10 @@ def initiate_command(
 
     slug = slugify(widget_name) or slugify(directory_name) or "mywidget"
     author = prompt("Author", "Your Name")
-    reverse_domain = prompt("Organization domain", build_default_reverse_domain(author))
+    organization_domain = prompt("Organization domain (optional)", "")
     widget_id = prompt_validated(
         "Widget id",
-        f"{reverse_domain}.{slug}",
+        build_default_widget_id(organization_domain, author, slug),
         validate_identifier,
         "Use only letters, digits, dots, and hyphens.",
     )
@@ -459,7 +459,10 @@ def should_skip_file(file_path: Path, output_path: Path) -> bool:
 
 
 def default_output_path(widget_dir: Path, manifest: dict[str, Any]) -> Path:
-    return widget_dir.parent / f"{manifest['id']}.icuewidget"
+    widget_name = (
+        slugify(str(manifest["name"])) or slugify(str(manifest["id"])) or "widget"
+    )
+    return widget_dir.parent / f"{widget_name}.icuewidget"
 
 
 def resolve_widget_dir(path_value: str) -> Path:
@@ -622,9 +625,19 @@ def title_case_from_slug(value: str) -> str:
     return " ".join(part.capitalize() for part in parts if part) or "My Widget"
 
 
-def build_default_reverse_domain(author: str) -> str:
+def build_default_widget_id(
+    organization_domain: str, author: str, widget_slug: str
+) -> str:
+    domain = organization_domain.strip().lower()
+    if domain:
+        cleaned = [part for part in reversed(re.split(r"[^a-z0-9]+", domain)) if part]
+        if cleaned:
+            return ".".join([*cleaned, widget_slug])
+
     author_slug = slugify(author)
-    return f"com.{author_slug}.widget" if author_slug else "com.example.widget"
+    if author_slug:
+        return f"com.{author_slug}.{widget_slug}"
+    return f"com.example.{widget_slug}"
 
 
 def build_translation_json(widget_name: str) -> str:
