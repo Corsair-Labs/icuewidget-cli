@@ -63,7 +63,7 @@ The CLI always creates:
 - `index.html`
 - `translation.json`
 - `resources/icon.svg`
-- optional `styles/main.css`
+- `styles/main.css`
 
 Examples:
 
@@ -71,31 +71,6 @@ Examples:
 icuewidget init ./HelloWidget
 ```
 
-## Widget id suggestion
-
-During `init`, the CLI asks for an optional organization domain and uses it to suggest a reverse-domain style widget id.
-
-If you enter a domain like:
-
-```text
-domain.com
-```
-
-and the widget name slug is `test`, the default widget id becomes:
-
-```text
-com.domain.test
-```
-
-If you leave the domain blank, the CLI falls back to the author name. For example, author `Roman Gru` with widget slug `test` becomes:
-
-```text
-com.romangru.test
-```
-
-You can always replace the suggested widget id with your own stable identifier.
-
-The `Widget name` and `Author` prompts do not have defaults and must be entered explicitly.
 
 ## Standalone releases
 
