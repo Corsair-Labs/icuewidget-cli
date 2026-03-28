@@ -34,6 +34,5 @@ def prompt_validated(
 
 def _ensure_answer(value: Any | None, default: Any) -> Any:
     if value is None:
-        return default
+        raise KeyboardInterrupt
     return value
-
