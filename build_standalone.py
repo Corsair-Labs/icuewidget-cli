@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import platform
 import shutil
 import subprocess
@@ -14,6 +15,8 @@ RELEASE_DIR = ROOT / "release"
 
 
 def main() -> int:
+    ensure_pyinstaller_installed()
+
     version = read_version()
     system = platform.system().lower()
     target_name = platform_tag(system)
@@ -51,6 +54,18 @@ def main() -> int:
     print(f"Built standalone binary: {artifact_dir / binary_name}")
     print(f"Created release archive: {archive_path}")
     return 0
+
+
+def ensure_pyinstaller_installed() -> None:
+    if importlib.util.find_spec("PyInstaller") is not None:
+        return
+
+    install_command = f'"{sys.executable}" -m pip install .[build]'
+    raise SystemExit(
+        "PyInstaller is not installed for the current Python interpreter.\n"
+        f"Install build dependencies first:\n  {install_command}\n\n"
+        "PyInstaller builds for the current operating system only, so create macOS and Windows binaries on their respective runners."
+    )
 
 
 def read_version() -> str:

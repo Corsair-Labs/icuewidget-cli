@@ -1,0 +1,19 @@
+{
+  "author": "Roman Gru",
+  "id": "com.romangru.test",
+  "name": "TEST",
+  "description": "A widget named TEST for demo",
+  "version": "1.0.0",
+  "preview_icon": "resources/icon.svg",
+  "min_framework_version": "1.0.0",
+  "os": [
+    {
+      "platform": "windows"
+    }
+  ],
+  "supported_devices": [
+    {
+      "type": "dashboard_lcd"
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 """Tests for validation.py — path traversal, symlinks, and _should_skip_file."""
+
 from __future__ import annotations
 
 import json
@@ -15,6 +16,7 @@ from icuewidget_cli.validation import (
 
 
 # ---------- _should_skip_file ----------
+
 
 def test_skip_output_file(tmp_path: Path):
     f = tmp_path / "widget.icuewidget"
@@ -60,6 +62,7 @@ def test_skip_file_outside_widget_root(tmp_path: Path):
 
 # ---------- validate_widget helpers ----------
 
+
 def _make_valid_widget(widget_dir: Path) -> None:
     """Create minimum valid widget files in widget_dir."""
     widget_dir.mkdir(parents=True, exist_ok=True)
@@ -80,14 +83,22 @@ def _make_valid_widget(widget_dir: Path) -> None:
     resources.mkdir()
     (resources / "icon.svg").write_text("<svg/>", encoding="utf-8")
     index = (
-        '<html><head><title>Test</title>'
-        '<link rel="icon" href="resources/icon.svg"></head>'
-        "<body><script>var icueEvents=[];</script></body></html>"
+        "<html><head><title>Test</title>"
+        '<link rel="icon" href="resources/icon.svg">'
+        '<link rel="stylesheet" href="styles/main.css"></head>'
+        '<body><script src="scripts/main.js"></script><script>var icueEvents=[];</script></body></html>'
     )
     (widget_dir / "index.html").write_text(index, encoding="utf-8")
+    styles = widget_dir / "styles"
+    styles.mkdir()
+    (styles / "main.css").write_text("body { color: red; }", encoding="utf-8")
+    scripts = widget_dir / "scripts"
+    scripts.mkdir()
+    (scripts / "main.js").write_text("const value = 1;", encoding="utf-8")
 
 
 # ---------- validate_widget — path traversal ----------
+
 
 def test_validate_rejects_preview_icon_traversal(tmp_path: Path):
     _make_valid_widget(tmp_path / "widget")
@@ -115,6 +126,7 @@ def test_validate_rejects_modules_traversal(tmp_path: Path):
 
 # ---------- validate_widget — symlinks ----------
 
+
 def test_validate_warns_on_internal_symlink(tmp_path: Path):
     _make_valid_widget(tmp_path / "widget")
     target = tmp_path / "widget" / "resources" / "icon.svg"
@@ -138,9 +150,79 @@ def test_validate_rejects_external_symlink(tmp_path: Path):
 
 # ---------- validate_widget — happy path ----------
 
+
 def test_validate_valid_widget(tmp_path: Path):
     _make_valid_widget(tmp_path / "widget")
     result = validate_widget(tmp_path / "widget")
     assert result.manifest["id"] == "com.test.widget"
     assert isinstance(result.warnings, list)
 
+
+def test_validate_rejects_missing_stylesheet_reference(tmp_path: Path):
+    widget_dir = tmp_path / "widget"
+    _make_valid_widget(widget_dir)
+    (widget_dir / "styles" / "main.css").unlink()
+
+    with pytest.raises(CliError, match="references a missing stylesheet"):
+        validate_widget(widget_dir)
+
+
+def test_validate_rejects_stylesheet_traversal(tmp_path: Path):
+    widget_dir = tmp_path / "widget"
+    _make_valid_widget(widget_dir)
+    (widget_dir / "index.html").write_text(
+        "<html><head><title>Test</title>"
+        '<link rel="icon" href="resources/icon.svg">'
+        '<link rel="stylesheet" href="../escape.css"></head>'
+        "<body><script>var icueEvents=[];</script></body></html>",
+        encoding="utf-8",
+    )
+    (tmp_path / "escape.css").write_text("body { color: red; }", encoding="utf-8")
+
+    with pytest.raises(CliError, match="stylesheet path escapes widget directory"):
+        validate_widget(widget_dir)
+
+
+def test_validate_rejects_invalid_css_syntax(tmp_path: Path):
+    widget_dir = tmp_path / "widget"
+    _make_valid_widget(widget_dir)
+    (widget_dir / "styles" / "main.css").write_text(
+        "body { color: red;", encoding="utf-8"
+    )
+
+    with pytest.raises(CliError, match="CSS syntax error in main.css"):
+        validate_widget(widget_dir)
+
+
+def test_validate_rejects_missing_script_reference(tmp_path: Path):
+    widget_dir = tmp_path / "widget"
+    _make_valid_widget(widget_dir)
+    (widget_dir / "scripts" / "main.js").unlink()
+
+    with pytest.raises(CliError, match="references a missing script"):
+        validate_widget(widget_dir)
+
+
+def test_validate_rejects_invalid_js_syntax(tmp_path: Path):
+    widget_dir = tmp_path / "widget"
+    _make_valid_widget(widget_dir)
+    (widget_dir / "scripts" / "main.js").write_text("const = ;", encoding="utf-8")
+
+    with pytest.raises(CliError, match="JavaScript syntax error in main.js"):
+        validate_widget(widget_dir)
+
+
+def test_validate_ignores_remote_assets(tmp_path: Path):
+    widget_dir = tmp_path / "widget"
+    _make_valid_widget(widget_dir)
+    (widget_dir / "index.html").write_text(
+        "<html><head><title>Test</title>"
+        '<link rel="icon" href="resources/icon.svg">'
+        '<link rel="stylesheet" href="https://cdn.example.com/main.css"></head>'
+        '<body><script src="https://cdn.example.com/main.js"></script>'
+        "<script>var icueEvents=[];</script></body></html>",
+        encoding="utf-8",
+    )
+
+    result = validate_widget(widget_dir)
+    assert result.manifest["name"] == "TestWidget"

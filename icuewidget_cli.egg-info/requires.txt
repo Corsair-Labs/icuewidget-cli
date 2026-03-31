@@ -1,6 +1,8 @@
 questionary<3.0,>=2.0
 typer<1.0,>=0.12
 rich<14.0,>=13.7
+esprima<5.0,>=4.0
+tinycss2<2.0,>=1.4
 
 [build]
 pyinstaller>=6.0
