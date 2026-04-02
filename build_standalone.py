@@ -34,7 +34,9 @@ def main() -> int:
         "--onefile",
         "--clean",
         "--noconfirm",
-        str(ROOT / "icuewidget_cli" / "__main__.py"),
+        "--hidden-import",
+        "icuewidget_cli",
+        str(ROOT / "icuewidget_cli_entry.py"),
     ]
     subprocess.run(command, cwd=ROOT, check=True)
 
