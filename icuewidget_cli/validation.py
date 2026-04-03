@@ -201,15 +201,19 @@ def _resolve_local_asset(
     ):
         return None
 
-    resolved_asset = (widget_dir / normalized_asset_path).resolve()
     widget_root = widget_dir.resolve()
-    if not resolved_asset.is_relative_to(widget_root):
-        raise CliError(
-            f"index.html {source_label} path escapes widget directory: {asset_path}"
-        )
-    if not resolved_asset.exists() or not resolved_asset.is_file():
-        raise CliError(f"index.html references a missing {source_label}: {asset_path}")
-    return resolved_asset
+    resolved_asset = (widget_dir / normalized_asset_path).resolve()
+
+    # Enforce existence only for assets inside the widget directory.
+    if resolved_asset.is_relative_to(widget_root):
+        if not resolved_asset.exists() or not resolved_asset.is_file():
+            raise CliError(
+                f"index.html references a missing {source_label}: {asset_path}"
+            )
+        return resolved_asset
+
+    # External assets (for shared plugins) are allowed and are not validated here.
+    return None
 
 
 def _validate_css_file(css_path: Path) -> None:

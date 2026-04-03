@@ -167,20 +167,49 @@ def test_validate_rejects_missing_stylesheet_reference(tmp_path: Path):
         validate_widget(widget_dir)
 
 
-def test_validate_rejects_stylesheet_traversal(tmp_path: Path):
+def test_validate_allows_external_relative_stylesheet_and_script(tmp_path: Path):
     widget_dir = tmp_path / "widget"
     _make_valid_widget(widget_dir)
+
+    plugin_root = tmp_path / "common" / "tools" / "media_viewer"
+    plugin_root.mkdir(parents=True)
+    (plugin_root / "MediaViewer.css").write_text(
+        ".media-viewer { color: red; }", encoding="utf-8"
+    )
+    (plugin_root / "MediaViewer.js").write_text(
+        "const mediaViewerEnabled = true;", encoding="utf-8"
+    )
+
     (widget_dir / "index.html").write_text(
         "<html><head><title>Test</title>"
         '<link rel="icon" href="resources/icon.svg">'
-        '<link rel="stylesheet" href="../escape.css"></head>'
-        "<body><script>var icueEvents=[];</script></body></html>",
+        '<link rel="stylesheet" href="../common/tools/media_viewer/MediaViewer.css"></head>'
+        '<body><script src="../common/tools/media_viewer/MediaViewer.js"></script>'
+        "<script>var icueEvents=[];</script></body></html>",
         encoding="utf-8",
     )
-    (tmp_path / "escape.css").write_text("body { color: red; }", encoding="utf-8")
 
-    with pytest.raises(CliError, match="stylesheet path escapes widget directory"):
-        validate_widget(widget_dir)
+    result = validate_widget(widget_dir)
+    assert result.manifest["id"] == "com.test.widget"
+
+
+def test_validate_allows_missing_external_relative_stylesheet_and_script(
+    tmp_path: Path,
+):
+    widget_dir = tmp_path / "widget"
+    _make_valid_widget(widget_dir)
+
+    (widget_dir / "index.html").write_text(
+        "<html><head><title>Test</title>"
+        '<link rel="icon" href="resources/icon.svg">'
+        '<link rel="stylesheet" href="../common/tools/media_viewer/MediaViewer.css"></head>'
+        '<body><script src="../common/tools/media_viewer/MediaViewer.js"></script>'
+        "<script>var icueEvents=[];</script></body></html>",
+        encoding="utf-8",
+    )
+
+    result = validate_widget(widget_dir)
+    assert result.manifest["id"] == "com.test.widget"
 
 
 def test_validate_rejects_invalid_css_syntax(tmp_path: Path):
