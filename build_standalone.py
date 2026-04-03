@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parent
 DIST_DIR = ROOT / "dist"
 BUILD_DIR = ROOT / "build"
 RELEASE_DIR = ROOT / "release"
+WINDOWS_ICON_PATH = ROOT / "installer" / "windows" / "assets" / "corsair-cli.ico"
 
 
 def main() -> int:
@@ -36,6 +37,16 @@ def main() -> int:
         "--noconfirm",
         str(ROOT / "icuewidget_cli" / "__main__.py"),
     ]
+
+    if system == "windows":
+        if not WINDOWS_ICON_PATH.exists():
+            raise SystemExit(
+                "Missing CORSAIR icon for Windows executable build:\n"
+                f"  {WINDOWS_ICON_PATH}\n"
+                "Restore installer/windows/assets/corsair-cli.ico and retry."
+            )
+        command.extend(["--icon", str(WINDOWS_ICON_PATH)])
+
     subprocess.run(command, cwd=ROOT, check=True)
 
     artifact_dir.mkdir(parents=True, exist_ok=True)

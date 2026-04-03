@@ -33,6 +33,14 @@ jobs:
       - name: Build standalone binary
         run: python build_standalone.py
 
+      - name: Install NSIS (Windows installer toolchain)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install nsis -y
+
+      - name: Build installer package
+        run: python build_installers.py
+
       - name: Prepare Windows signing metadata
         if: runner.os == 'Windows'
         shell: pwsh

@@ -76,6 +76,23 @@ icuewidget init ./HelloWidget
 
 This repo includes release packaging for standalone macOS and Windows binaries.
 
+For end-user-friendly global install artifacts, it also includes installer packaging:
+
+- macOS: signed-friendly `.pkg` installer target (installs `icuewidget` to `/usr/local/bin`)
+- Windows: branded CORSAIR installer `.exe` target (installs `icuewidget.exe` and adds it to user PATH)
+
+Windows packaging uses official CORSAIR branding assets for both:
+
+- `icuewidget.exe` icon
+- installer/uninstaller icon and installer header/wizard artwork
+
+Local maintainer workflow:
+
+```bash
+python build_standalone.py
+python build_installers.py
+```
+
 See:
 
 - `docs/CLI_Release_Packaging.md`
