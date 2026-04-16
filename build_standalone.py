@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import platform
 import shutil
 import subprocess
@@ -25,6 +26,8 @@ def main() -> int:
     artifact_dir = RELEASE_DIR / f"icuewidget-{version}-{target_name}"
 
     clean_paths(DIST_DIR, BUILD_DIR, artifact_dir)
+
+    stamp_version(version)
 
     command = [
         sys.executable,
@@ -55,17 +58,7 @@ def main() -> int:
     shutil.copy2(DIST_DIR / binary_name, artifact_dir / binary_name)
     shutil.copy2(ROOT / "README.md", artifact_dir / "README.md")
 
-    archive_base = RELEASE_DIR / f"icuewidget-{version}-{target_name}"
-    archive_format = "zip"
-    archive_path = shutil.make_archive(
-        str(archive_base),
-        archive_format,
-        root_dir=artifact_dir.parent,
-        base_dir=artifact_dir.name,
-    )
-
     print(f"Built standalone binary: {artifact_dir / binary_name}")
-    print(f"Created release archive: {archive_path}")
     return 0
 
 
@@ -81,11 +74,19 @@ def ensure_pyinstaller_installed() -> None:
     )
 
 
-def read_version() -> str:
-    namespace: dict[str, str] = {}
+def stamp_version(version: str) -> None:
     version_file = ROOT / "icuewidget_cli" / "__init__.py"
-    exec(version_file.read_text(encoding="utf-8"), namespace)
-    return namespace["__version__"]
+    version_file.write_text(
+        f'__all__ = ["__version__"]\n\n__version__ = "{version}"\n',
+        encoding="utf-8",
+    )
+
+
+def read_version() -> str:
+    env_version = os.environ.get("BUILD_VERSION")
+    if env_version:
+        return env_version
+    return "0.0.1"
 
 
 def platform_tag(system: str) -> str:
