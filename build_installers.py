@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import platform
 import shutil
 import subprocess
@@ -110,10 +111,10 @@ def build_windows_installer(
 
 
 def read_version() -> str:
-    namespace: dict[str, str] = {}
-    version_file = ROOT / "icuewidget_cli" / "__init__.py"
-    exec(version_file.read_text(encoding="utf-8"), namespace)
-    return namespace["__version__"]
+    env_version = os.environ.get("BUILD_VERSION")
+    if env_version:
+        return env_version
+    return "0.0.1"
 
 
 def platform_tag(system: str) -> str:
