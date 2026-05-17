@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from icuewidget_cli.version import resolve_version
+
 
 ROOT = Path(__file__).resolve().parent
 DIST_DIR = ROOT / "dist"
@@ -75,18 +77,15 @@ def ensure_pyinstaller_installed() -> None:
 
 
 def stamp_version(version: str) -> None:
-    version_file = ROOT / "icuewidget_cli" / "__init__.py"
+    version_file = ROOT / "icuewidget_cli" / "_build_version.py"
     version_file.write_text(
-        f'__all__ = ["__version__"]\n\n__version__ = "{version}"\n',
+        f'VERSION = "{version}"\n',
         encoding="utf-8",
     )
 
 
 def read_version() -> str:
-    env_version = os.environ.get("BUILD_VERSION")
-    if env_version:
-        return env_version
-    return "0.2.4"
+    return resolve_version()
 
 
 def platform_tag(system: str) -> str:

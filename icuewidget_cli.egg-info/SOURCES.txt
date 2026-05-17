@@ -8,6 +8,7 @@ icuewidget_cli/prompts.py
 icuewidget_cli/scaffold.py
 icuewidget_cli/templates.py
 icuewidget_cli/validation.py
+icuewidget_cli/version.py
 icuewidget_cli.egg-info/PKG-INFO
 icuewidget_cli.egg-info/SOURCES.txt
 icuewidget_cli.egg-info/dependency_links.txt

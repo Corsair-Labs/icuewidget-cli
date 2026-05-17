@@ -6,6 +6,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from icuewidget_cli.version import resolve_version
+
 
 ROOT = Path(__file__).resolve().parent
 RELEASE_DIR = ROOT / "release"
@@ -137,10 +139,7 @@ def stage_windows_installer_assets() -> Path:
 
 
 def read_version() -> str:
-    env_version = os.environ.get("BUILD_VERSION")
-    if env_version:
-        return env_version
-    return "0.2.4"
+    return resolve_version()
 
 
 def platform_tag(system: str) -> str:

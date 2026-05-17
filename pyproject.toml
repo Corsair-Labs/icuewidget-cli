@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "icuewidget-cli"
-version = "0.2.4"
+dynamic = ["version"]
 description = "CLI for creating and packaging iCUE widgets"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -29,6 +29,9 @@ build = [
 
 [tool.setuptools]
 packages = ["icuewidget_cli"]
+
+[tool.setuptools.dynamic]
+version = { attr = "icuewidget_cli.version.__version__" }
 
 [tool.pyinstaller]
 console = true

@@ -10,6 +10,7 @@ from icuewidget_cli.cli import (
     slugify,
     validate_identifier,
 )
+from icuewidget_cli.version import read_base_version, resolve_version
 
 
 # --- slugify ---
@@ -105,3 +106,38 @@ def test_validate_identifier_invalid():
     assert validate_identifier("widget@name") is False
     assert validate_identifier("") is False
 
+
+# --- version resolution ---
+
+def test_read_base_version_uses_jenkins_config(monkeypatch):
+    monkeypatch.delenv("ICUEWIDGET_BASE_VERSION", raising=False)
+    assert read_base_version() == "0.2"
+
+
+def test_resolve_version_prefers_build_version(monkeypatch):
+    monkeypatch.setattr("icuewidget_cli.version.read_stamped_version", lambda: None)
+    monkeypatch.setenv("BUILD_VERSION", "0.2.11")
+    monkeypatch.setenv("BUILD_NUMBER", "99")
+    assert resolve_version() == "0.2.11"
+
+
+def test_resolve_version_combines_base_and_build_number(monkeypatch):
+    monkeypatch.setattr("icuewidget_cli.version.read_stamped_version", lambda: None)
+    monkeypatch.delenv("BUILD_VERSION", raising=False)
+    monkeypatch.setenv("ICUEWIDGET_BASE_VERSION", "0.3")
+    monkeypatch.setenv("BUILD_NUMBER", "7")
+    assert resolve_version() == "0.3.7"
+
+
+def test_resolve_version_uses_zero_patch_for_local_builds(monkeypatch):
+    monkeypatch.setattr("icuewidget_cli.version.read_stamped_version", lambda: None)
+    monkeypatch.delenv("BUILD_VERSION", raising=False)
+    monkeypatch.delenv("BUILD_NUMBER", raising=False)
+    monkeypatch.setenv("ICUEWIDGET_BASE_VERSION", "0.3")
+    assert resolve_version() == "0.3.0"
+
+
+def test_resolve_version_prefers_stamped_build_version(monkeypatch):
+    monkeypatch.setattr("icuewidget_cli.version.read_stamped_version", lambda: "0.2.11")
+    monkeypatch.setenv("BUILD_VERSION", "0.2.12")
+    assert resolve_version() == "0.2.11"
