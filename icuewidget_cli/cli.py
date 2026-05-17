@@ -163,7 +163,7 @@ def init_command(
         Panel.fit("Interactive widget initialization", border_style="blue"))
     console.print(
         # TODO: make this dynamic to support other devices
-        f"[dim]A configurable hello-world widget for Xeneon Edge on will be created.[/dim]"
+        f"[dim]A configurable hello-world widget for Xeneon Edge on Windows will be created.[/dim]"
     )
     console.print(Rule(style="blue"))
 

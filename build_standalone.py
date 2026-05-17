@@ -86,7 +86,7 @@ def read_version() -> str:
     env_version = os.environ.get("BUILD_VERSION")
     if env_version:
         return env_version
-    return "0.0.1"
+    return "0.2.4"
 
 
 def platform_tag(system: str) -> str:

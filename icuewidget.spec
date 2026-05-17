@@ -1,12 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
+
+
+ROOT = Path(SPECPATH)
 
 a = Analysis(
-    ['icuewidget_cli/__main__.py'],
-    pathex=[],
+    ['icuewidget_cli_entry.py'],
+    pathex=[str(ROOT)],
     binaries=[],
     datas=[],
-    hiddenimports=[],
+    hiddenimports=['icuewidget_cli'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

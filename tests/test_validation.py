@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -97,6 +96,13 @@ def _make_valid_widget(widget_dir: Path) -> None:
     (scripts / "main.js").write_text("const value = 1;", encoding="utf-8")
 
 
+def _set_manifest_required_plugins(widget_dir: Path, plugins: list[str]) -> None:
+    manifest_path = widget_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["required_plugins"] = plugins
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+
 # ---------- validate_widget — path traversal ----------
 
 
@@ -167,33 +173,7 @@ def test_validate_rejects_missing_stylesheet_reference(tmp_path: Path):
         validate_widget(widget_dir)
 
 
-def test_validate_allows_external_relative_stylesheet_and_script(tmp_path: Path):
-    widget_dir = tmp_path / "widget"
-    _make_valid_widget(widget_dir)
-
-    plugin_root = tmp_path / "common" / "tools" / "media_viewer"
-    plugin_root.mkdir(parents=True)
-    (plugin_root / "MediaViewer.css").write_text(
-        ".media-viewer { color: red; }", encoding="utf-8"
-    )
-    (plugin_root / "MediaViewer.js").write_text(
-        "const mediaViewerEnabled = true;", encoding="utf-8"
-    )
-
-    (widget_dir / "index.html").write_text(
-        "<html><head><title>Test</title>"
-        '<link rel="icon" href="resources/icon.svg">'
-        '<link rel="stylesheet" href="../common/tools/media_viewer/MediaViewer.css"></head>'
-        '<body><script src="../common/tools/media_viewer/MediaViewer.js"></script>'
-        "<script>var icueEvents=[];</script></body></html>",
-        encoding="utf-8",
-    )
-
-    result = validate_widget(widget_dir)
-    assert result.manifest["id"] == "com.test.widget"
-
-
-def test_validate_allows_missing_external_relative_stylesheet_and_script(
+def test_validate_rejects_script_and_stylesheet_outside_widget_directory(
     tmp_path: Path,
 ):
     widget_dir = tmp_path / "widget"
@@ -204,6 +184,32 @@ def test_validate_allows_missing_external_relative_stylesheet_and_script(
         '<link rel="icon" href="resources/icon.svg">'
         '<link rel="stylesheet" href="../common/tools/media_viewer/MediaViewer.css"></head>'
         '<body><script src="../common/tools/media_viewer/MediaViewer.js"></script>'
+        "<script>var icueEvents=[];</script></body></html>",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(CliError, match="outside the widget directory"):
+        validate_widget(widget_dir)
+
+
+def test_validate_accepts_local_common_assets_inside_widget(tmp_path: Path):
+    widget_dir = tmp_path / "widget"
+    _make_valid_widget(widget_dir)
+
+    media_viewer_dir = widget_dir / "common" / "tools" / "media_viewer"
+    media_viewer_dir.mkdir(parents=True)
+    (media_viewer_dir / "MediaViewer.css").write_text(
+        ".media-viewer { color: red; }", encoding="utf-8"
+    )
+    (media_viewer_dir / "MediaViewer.js").write_text(
+        "const mediaViewerEnabled = true;", encoding="utf-8"
+    )
+
+    (widget_dir / "index.html").write_text(
+        "<html><head><title>Test</title>"
+        '<link rel="icon" href="resources/icon.svg">'
+        '<link rel="stylesheet" href="common/tools/media_viewer/MediaViewer.css"></head>'
+        '<body><script src="common/tools/media_viewer/MediaViewer.js"></script>'
         "<script>var icueEvents=[];</script></body></html>",
         encoding="utf-8",
     )
@@ -241,7 +247,7 @@ def test_validate_rejects_invalid_js_syntax(tmp_path: Path):
         validate_widget(widget_dir)
 
 
-def test_validate_ignores_remote_assets(tmp_path: Path):
+def test_validate_rejects_remote_assets(tmp_path: Path):
     widget_dir = tmp_path / "widget"
     _make_valid_widget(widget_dir)
     (widget_dir / "index.html").write_text(
@@ -250,6 +256,119 @@ def test_validate_ignores_remote_assets(tmp_path: Path):
         '<link rel="stylesheet" href="https://cdn.example.com/main.css"></head>'
         '<body><script src="https://cdn.example.com/main.js"></script>'
         "<script>var icueEvents=[];</script></body></html>",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(CliError, match="external stylesheet"):
+        validate_widget(widget_dir)
+
+
+def test_validate_rejects_sensors_plugin_without_wrapper_or_plugin_usage(
+    tmp_path: Path,
+):
+    widget_dir = tmp_path / "widget"
+    _make_valid_widget(widget_dir)
+    _set_manifest_required_plugins(
+        widget_dir,
+        ["widgetbuilder.sensorsdataprovider:Sensors:1.0"],
+    )
+
+    with pytest.raises(
+        CliError,
+        match="manifest.required_plugins includes 'widgetbuilder.sensorsdataprovider:Sensors:1.0'",
+    ):
+        validate_widget(widget_dir)
+
+
+def test_validate_accepts_sensors_plugin_with_local_wrapper_files(tmp_path: Path):
+    widget_dir = tmp_path / "widget"
+    _make_valid_widget(widget_dir)
+    _set_manifest_required_plugins(
+        widget_dir,
+        ["widgetbuilder.sensorsdataprovider:Sensors:1.0"],
+    )
+
+    plugin_dir = widget_dir / "common" / "plugins"
+    plugin_dir.mkdir(parents=True)
+    (plugin_dir / "IcueWidgetApiWrapper.js").write_text(
+        "class IcueWidgetApiWrapper {}", encoding="utf-8"
+    )
+    (plugin_dir / "SimpleSensorApiWrapper.js").write_text(
+        "class SimpleSensorApiWrapper extends IcueWidgetApiWrapper {}",
+        encoding="utf-8",
+    )
+
+    (widget_dir / "index.html").write_text(
+        "<html><head><title>Test</title>"
+        '<link rel="icon" href="resources/icon.svg">'
+        '<link rel="stylesheet" href="styles/main.css"></head>'
+        '<body><script src="common/plugins/IcueWidgetApiWrapper.js"></script>'
+        '<script src="common/plugins/SimpleSensorApiWrapper.js"></script>'
+        "<script>var icueEvents=[];</script></body></html>",
+        encoding="utf-8",
+    )
+
+    result = validate_widget(widget_dir)
+    assert result.manifest["id"] == "com.test.widget"
+
+
+def test_validate_accepts_media_plugin_with_inline_wrapper_classes(tmp_path: Path):
+    widget_dir = tmp_path / "widget"
+    _make_valid_widget(widget_dir)
+    _set_manifest_required_plugins(
+        widget_dir,
+        ["widgetbuilder.mediadataprovider:Media:1.0"],
+    )
+
+    (widget_dir / "index.html").write_text(
+        "<html><head><title>Test</title>"
+        '<link rel="icon" href="resources/icon.svg">'
+        '<link rel="stylesheet" href="styles/main.css"></head>'
+        "<body><script>"
+        "class IcueWidgetApiWrapper {}"
+        "class SimpleMediaApiWrapper extends IcueWidgetApiWrapper {}"
+        "var icueEvents=[];"
+        "</script></body></html>",
+        encoding="utf-8",
+    )
+
+    result = validate_widget(widget_dir)
+    assert result.manifest["name"] == "TestWidget"
+
+
+def test_validate_rejects_link_plugin_without_linkprovider_usage(tmp_path: Path):
+    widget_dir = tmp_path / "widget"
+    _make_valid_widget(widget_dir)
+    _set_manifest_required_plugins(
+        widget_dir,
+        ["widgetbuilder.linkprovider:Url:1.0"],
+    )
+
+    with pytest.raises(
+        CliError,
+        match="does not appear to reference Linkprovider usage",
+    ):
+        validate_widget(widget_dir)
+
+
+def test_validate_accepts_link_plugin_with_direct_usage_marker(tmp_path: Path):
+    widget_dir = tmp_path / "widget"
+    _make_valid_widget(widget_dir)
+    _set_manifest_required_plugins(
+        widget_dir,
+        ["widgetbuilder.linkprovider:Url:1.0"],
+    )
+
+    (widget_dir / "index.html").write_text(
+        "<html><head><title>Test</title>"
+        '<link rel="icon" href="resources/icon.svg">'
+        '<link rel="stylesheet" href="styles/main.css"></head>'
+        "<body><script>"
+        "if (window.plugins && window.plugins.Linkprovider && pluginLinkprovider_initialized) {"
+        "window.plugins.Linkprovider.open('https://example.com');"
+        "}"
+        "var icueEvents=[];"
+        "</script></body></html>",
         encoding="utf-8",
     )
 

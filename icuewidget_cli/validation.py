@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlsplit
 
 import esprima
 import tinycss2
@@ -28,13 +29,21 @@ class ValidationResult:
     warnings: list[str]
 
 
+SENSORS_PLUGIN_ID = "widgetbuilder.sensorsdataprovider"
+MEDIA_PLUGIN_ID = "widgetbuilder.mediadataprovider"
+LINK_PLUGIN_ID = "widgetbuilder.linkprovider"
+
+BASE_WRAPPER_FILE = "icuewidgetapiwrapper.js"
+BASE_WRAPPER_CLASS = "IcueWidgetApiWrapper"
+
+
 def validate_widget(widget_dir: Path) -> ValidationResult:
     manifest_path, index_path = _validate_required_files(widget_dir)
     manifest = _validate_manifest(widget_dir, manifest_path)
     warnings: list[str] = []
 
     load_json(widget_dir / "translation.json", label="translation.json")
-    _validate_index_html(widget_dir, index_path, warnings)
+    _validate_index_html(widget_dir, index_path, manifest, warnings)
     _validate_symlinks(widget_dir, warnings)
 
     return ValidationResult(manifest=manifest, warnings=warnings)
@@ -150,7 +159,10 @@ def _validate_manifest(widget_dir: Path, manifest_path: Path) -> dict[str, Any]:
 
 
 def _validate_index_html(
-    widget_dir: Path, index_path: Path, warnings: list[str]
+    widget_dir: Path,
+    index_path: Path,
+    manifest: dict[str, Any],
+    warnings: list[str],
 ) -> None:
     index_html = index_path.read_text(encoding="utf-8")
     parser = WidgetHtmlParser()
@@ -168,6 +180,9 @@ def _validate_index_html(
     if "icueEvents" not in index_html:
         warnings.append("index.html does not declare icueEvents")
 
+    local_script_paths: list[Path] = []
+    local_script_sources: list[str] = []
+
     for asset in parser.stylesheets:
         css_path = _resolve_local_asset(widget_dir, asset, source_label="stylesheet")
         if css_path is not None:
@@ -176,7 +191,16 @@ def _validate_index_html(
     for asset in parser.scripts:
         js_path = _resolve_local_asset(widget_dir, asset, source_label="script")
         if js_path is not None:
-            _validate_js_file(js_path)
+            js_source = _validate_js_file(js_path)
+            local_script_paths.append(js_path)
+            local_script_sources.append(js_source)
+
+    _validate_required_plugin_assets(
+        manifest=manifest,
+        index_html=index_html,
+        local_script_paths=local_script_paths,
+        local_script_sources=local_script_sources,
+    )
 
 
 def _validate_symlinks(widget_dir: Path, warnings: list[str]) -> None:
@@ -195,16 +219,19 @@ def _validate_symlinks(widget_dir: Path, warnings: list[str]) -> None:
 def _resolve_local_asset(
     widget_dir: Path, asset_path: str, *, source_label: str
 ) -> Path | None:
-    normalized_asset_path = asset_path.strip()
-    if not normalized_asset_path or normalized_asset_path.startswith(
-        ("http://", "https://", "//", "data:", "#")
-    ):
+    asset_kind, normalized_asset_path = _classify_asset_path(asset_path)
+    if asset_kind is None:
         return None
+
+    if asset_kind == "external":
+        raise CliError(
+            f"index.html references an external {source_label}: {asset_path}. "
+            f"All scripts and stylesheets must be local files inside the widget directory"
+        )
 
     widget_root = widget_dir.resolve()
     resolved_asset = (widget_dir / normalized_asset_path).resolve()
 
-    # Enforce existence only for assets inside the widget directory.
     if resolved_asset.is_relative_to(widget_root):
         if not resolved_asset.exists() or not resolved_asset.is_file():
             raise CliError(
@@ -212,8 +239,29 @@ def _resolve_local_asset(
             )
         return resolved_asset
 
-    # External assets (for shared plugins) are allowed and are not validated here.
-    return None
+    raise CliError(
+        f"index.html references a {source_label} outside the widget directory: "
+        f"{asset_path}"
+    )
+
+
+def _classify_asset_path(asset_path: str) -> tuple[str | None, str]:
+    raw_path = asset_path.strip()
+    if not raw_path or raw_path.startswith("#"):
+        return None, ""
+
+    if raw_path.startswith("//"):
+        return "external", raw_path
+
+    parsed = urlsplit(raw_path)
+    if parsed.scheme:
+        return "external", raw_path
+
+    normalized_local_path = unquote(parsed.path).strip()
+    if not normalized_local_path:
+        return None, ""
+
+    return "local", normalized_local_path
 
 
 def _validate_css_file(css_path: Path) -> None:
@@ -231,11 +279,110 @@ def _validate_css_file(css_path: Path) -> None:
         raise CliError(f"CSS syntax error in {css_path.name}: {first_error.message}")
 
 
-def _validate_js_file(js_path: Path) -> None:
+def _validate_js_file(js_path: Path) -> str:
+    js_source = js_path.read_text(encoding="utf-8")
     try:
-        esprima.parseScript(js_path.read_text(encoding="utf-8"), tolerant=False)
+        esprima.parseScript(js_source, tolerant=False)
     except esprima.Error as exc:
         raise CliError(f"JavaScript syntax error in {js_path.name}: {exc}") from exc
+
+    return js_source
+
+
+def _validate_required_plugin_assets(
+    *,
+    manifest: dict[str, Any],
+    index_html: str,
+    local_script_paths: list[Path],
+    local_script_sources: list[str],
+) -> None:
+    required_plugins = manifest.get("required_plugins") or []
+    if not required_plugins:
+        return
+
+    script_names = {script_path.name.lower() for script_path in local_script_paths}
+    searchable_source = "\n".join([index_html, *local_script_sources])
+
+    for plugin_entry in required_plugins:
+        plugin_id = plugin_entry.split(":", 1)[0].strip().lower()
+
+        if plugin_id == SENSORS_PLUGIN_ID:
+            _validate_async_wrapper_plugin(
+                plugin_entry=plugin_entry,
+                plugin_label="Sensors",
+                wrapper_file="simplesensorapiwrapper.js",
+                wrapper_class="SimpleSensorApiWrapper",
+                direct_markers=(
+                    "window.plugins.Sensorsdataprovider",
+                    "plugins.Sensorsdataprovider",
+                    "pluginSensorsdataprovider_initialized",
+                ),
+                script_names=script_names,
+                searchable_source=searchable_source,
+            )
+        elif plugin_id == MEDIA_PLUGIN_ID:
+            _validate_async_wrapper_plugin(
+                plugin_entry=plugin_entry,
+                plugin_label="Media",
+                wrapper_file="simplemediaapiwrapper.js",
+                wrapper_class="SimpleMediaApiWrapper",
+                direct_markers=(
+                    "window.plugins.Mediadataprovider",
+                    "plugins.Mediadataprovider",
+                    "pluginMediadataprovider_initialized",
+                ),
+                script_names=script_names,
+                searchable_source=searchable_source,
+            )
+        elif plugin_id == LINK_PLUGIN_ID:
+            if not _contains_any(
+                searchable_source,
+                (
+                    "window.plugins.Linkprovider",
+                    "plugins.Linkprovider",
+                    "pluginLinkprovider_initialized",
+                ),
+            ):
+                raise CliError(
+                    f"manifest.required_plugins includes '{plugin_entry}' (Link), "
+                    "but index.html does not appear to reference Linkprovider usage"
+                )
+
+
+def _validate_async_wrapper_plugin(
+    *,
+    plugin_entry: str,
+    plugin_label: str,
+    wrapper_file: str,
+    wrapper_class: str,
+    direct_markers: tuple[str, ...],
+    script_names: set[str],
+    searchable_source: str,
+) -> None:
+    has_wrapper_file = wrapper_file in script_names
+    has_wrapper_class = wrapper_class in searchable_source
+    has_direct_usage = _contains_any(searchable_source, direct_markers)
+
+    if not (has_wrapper_file or has_wrapper_class or has_direct_usage):
+        raise CliError(
+            f"manifest.required_plugins includes '{plugin_entry}' ({plugin_label}), "
+            f"but index.html does not appear to load '{wrapper_file}', define "
+            f"'{wrapper_class}', or directly access the plugin API"
+        )
+
+    using_wrapper = has_wrapper_file or has_wrapper_class
+    has_base_wrapper_file = BASE_WRAPPER_FILE in script_names
+    has_base_wrapper_class = BASE_WRAPPER_CLASS in searchable_source
+    if using_wrapper and not (has_base_wrapper_file or has_base_wrapper_class):
+        raise CliError(
+            f"manifest.required_plugins includes '{plugin_entry}' ({plugin_label}) and "
+            f"uses '{wrapper_class}', but '{BASE_WRAPPER_CLASS}' is missing. "
+            f"Include '{BASE_WRAPPER_FILE}' or define '{BASE_WRAPPER_CLASS}' inline"
+        )
+
+
+def _contains_any(source: str, candidates: tuple[str, ...]) -> bool:
+    return any(candidate in source for candidate in candidates)
 
 
 def _validate_balanced_css_delimiters(css_text: str, css_path: Path) -> None:

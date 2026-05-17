@@ -11,6 +11,9 @@ ROOT = Path(__file__).resolve().parent
 RELEASE_DIR = ROOT / "release"
 BUILD_DIR = ROOT / "build"
 WINDOWS_INSTALLER_SCRIPT = ROOT / "installer" / "windows" / "icuewidget-installer.nsi"
+WINDOWS_INSTALLER_ASSETS_DIR = ROOT / "installer" / "windows" / "assets"
+WINDOWS_STAGED_ASSETS_DIR = BUILD_DIR / "installer-windows-assets"
+WINDOWS_SIDE_IMAGE = "InstallerSideImage.bmp"
 
 
 def main() -> int:
@@ -97,6 +100,8 @@ def build_windows_installer(
             "  choco install nsis -y"
         )
 
+    staged_assets_dir = stage_windows_installer_assets()
+
     clean_paths(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -105,16 +110,37 @@ def build_windows_installer(
         f"/DVERSION={version}",
         f"/DBINARY_PATH={binary_path.resolve()}",
         f"/DOUTFILE={output_path.resolve()}",
+        f"/DBRAND_ASSET_DIR={staged_assets_dir.resolve()}",
         str(WINDOWS_INSTALLER_SCRIPT),
     ]
     subprocess.run(command, cwd=ROOT, check=True)
+
+
+def stage_windows_installer_assets() -> Path:
+    if not WINDOWS_INSTALLER_ASSETS_DIR.exists():
+        raise SystemExit(
+            f"Windows installer assets directory not found: {WINDOWS_INSTALLER_ASSETS_DIR}"
+        )
+
+    clean_paths(WINDOWS_STAGED_ASSETS_DIR)
+    shutil.copytree(WINDOWS_INSTALLER_ASSETS_DIR, WINDOWS_STAGED_ASSETS_DIR)
+
+    side_image = WINDOWS_STAGED_ASSETS_DIR / WINDOWS_SIDE_IMAGE
+    if not side_image.exists():
+        raise SystemExit(
+            "Missing pre-rendered NSIS side bitmap:\n"
+            f"  {WINDOWS_INSTALLER_ASSETS_DIR / WINDOWS_SIDE_IMAGE}\n"
+            "Regenerate it from InstallerSideImage.png and commit the BMP asset."
+        )
+
+    return WINDOWS_STAGED_ASSETS_DIR
 
 
 def read_version() -> str:
     env_version = os.environ.get("BUILD_VERSION")
     if env_version:
         return env_version
-    return "0.0.1"
+    return "0.2.4"
 
 
 def platform_tag(system: str) -> str:

@@ -47,6 +47,8 @@ def test_scaffold_manifest_content(tmp_path: Path):
     assert written["name"] == "Hello"
     assert written["id"] == "com.test.widget"
     assert written["version"] == "1.0.0"
+    assert written["os"] == [{"platform": "windows"}]
+    assert written["supported_devices"] == [{"type": "dashboard_lcd"}]
 
 
 def test_scaffold_index_html_contains_title(tmp_path: Path):
@@ -71,4 +73,3 @@ def test_scaffold_icon_svg_exists(tmp_path: Path):
 def test_scaffold_result_target_dir(tmp_path: Path):
     result = scaffold_widget(tmp_path, _make_manifest(), "TestWidget")
     assert result.target_dir == tmp_path
-
