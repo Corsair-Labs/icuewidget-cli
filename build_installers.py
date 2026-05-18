@@ -15,7 +15,7 @@ BUILD_DIR = ROOT / "build"
 WINDOWS_INSTALLER_SCRIPT = ROOT / "installer" / "windows" / "icuewidget-installer.nsi"
 WINDOWS_INSTALLER_ASSETS_DIR = ROOT / "installer" / "windows" / "assets"
 WINDOWS_STAGED_ASSETS_DIR = BUILD_DIR / "installer-windows-assets"
-WINDOWS_SIDE_IMAGE = "InstallerSideImage.bmp"
+WINDOWS_SIDE_IMAGE = "corsair-wizard.bmp"
 
 
 def main() -> int:
@@ -132,7 +132,7 @@ def stage_windows_installer_assets() -> Path:
         raise SystemExit(
             "Missing pre-rendered NSIS side bitmap:\n"
             f"  {WINDOWS_INSTALLER_ASSETS_DIR / WINDOWS_SIDE_IMAGE}\n"
-            "Regenerate it from InstallerSideImage.png and commit the BMP asset."
+            "Commit the BMP asset before building the installer."
         )
 
     return WINDOWS_STAGED_ASSETS_DIR

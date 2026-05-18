@@ -48,7 +48,7 @@ Artifacts are written to:
 Windows packaging uses official CORSAIR branding assets:
 
 - installer branding text: `CORSAIR`
-- iCUE Widget CLI welcome/finish copy with CORSAIR website link (`https://www.corsair.com`)
+- iCUE Widget CLI welcome/finish copy
 - installer/uninstaller icon: `installer/windows/assets/corsair-cli.ico`
 - installer wizard/header art: `installer/windows/assets/corsair-wizard.bmp` and `installer/windows/assets/corsair-header.bmp`
 - standalone `icuewidget.exe` icon: `installer/windows/assets/corsair-cli.ico`

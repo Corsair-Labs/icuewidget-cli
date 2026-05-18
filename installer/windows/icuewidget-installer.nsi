@@ -16,14 +16,12 @@
 !define PRODUCT_NAME "iCUE Widget CLI"
 !define PRODUCT_PUBLISHER "Corsair"
 !define PRODUCT_BRAND "CORSAIR"
-!define PRODUCT_WEB_SITE "https://www.corsair.com"
 !ifndef BRAND_ASSET_DIR
 !define BRAND_ASSET_DIR "installer\windows\assets"
 !endif
 
 !define BRAND_ICON "${BRAND_ASSET_DIR}\corsair-cli.ico"
-!define BRAND_WIZARD_BITMAP "${BRAND_ASSET_DIR}\InstallerSideImage.bmp"
-!define LEGACY_BRAND_WIZARD_BITMAP "${BRAND_ASSET_DIR}\corsair-wizard.bmp"
+!define BRAND_WIZARD_BITMAP "${BRAND_ASSET_DIR}\corsair-wizard.bmp"
 !define BRAND_HEADER_BITMAP "${BRAND_ASSET_DIR}\corsair-header.bmp"
 !define NSIS_GRAPHICS_DIR "${NSISDIR}\Contrib\Graphics"
 
@@ -45,8 +43,6 @@ Unicode true
 !define MUI_WELCOMEPAGE_TEXT "This wizard installs ${PRODUCT_NAME} for your user account and adds it to your PATH."
 !define MUI_FINISHPAGE_TITLE "${PRODUCT_NAME} Installed"
 !define MUI_FINISHPAGE_TEXT "${PRODUCT_NAME} is ready to use from any new terminal window."
-!define MUI_FINISHPAGE_LINK "Visit ${PRODUCT_BRAND}"
-!define MUI_FINISHPAGE_LINK_LOCATION "${PRODUCT_WEB_SITE}"
 
 ; Prefer official CORSAIR branding assets from this repository.
 !if /FileExists "${BRAND_ICON}"
@@ -65,12 +61,8 @@ Unicode true
 !if /FileExists "${BRAND_WIZARD_BITMAP}"
   !define MUI_WELCOMEFINISHPAGE_BITMAP "${BRAND_WIZARD_BITMAP}"
 !else
-  !if /FileExists "${LEGACY_BRAND_WIZARD_BITMAP}"
-    !define MUI_WELCOMEFINISHPAGE_BITMAP "${LEGACY_BRAND_WIZARD_BITMAP}"
-  !else
-    !if /FileExists "${NSIS_GRAPHICS_DIR}\Wizard\orange.bmp"
-      !define MUI_WELCOMEFINISHPAGE_BITMAP "${NSIS_GRAPHICS_DIR}\Wizard\orange.bmp"
-    !endif
+  !if /FileExists "${NSIS_GRAPHICS_DIR}\Wizard\orange.bmp"
+    !define MUI_WELCOMEFINISHPAGE_BITMAP "${NSIS_GRAPHICS_DIR}\Wizard\orange.bmp"
   !endif
 !endif
 
