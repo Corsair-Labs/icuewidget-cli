@@ -1,13 +1,16 @@
 """Tests for pure utility functions in cli.py."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from icuewidget_cli.cli import (
+    bump_patch_version,
     build_default_widget_id,
     default_output_path,
     is_semver,
     slugify,
+    update_manifest_to_latest,
     validate_identifier,
 )
 from icuewidget_cli.version import read_base_version, resolve_version
@@ -77,6 +80,93 @@ def test_default_output_path_fallback_to_widget(tmp_path: Path):
     manifest = {"name": "@@@", "id": "@@@"}
     result = default_output_path(widget_dir, manifest)
     assert result == tmp_path / "widget.icuewidget"
+
+
+# --- manifest update helpers ---
+
+def test_update_manifest_to_latest_adds_missing_min_app_version(tmp_path: Path):
+    widget_dir = tmp_path / "widget"
+    widget_dir.mkdir()
+    manifest_path = widget_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps({"name": "Hello", "id": "com.test.hello", "version": "1.0.0"}),
+        encoding="utf-8",
+    )
+
+    changes = update_manifest_to_latest(widget_dir, min_app_version="5.4.3")
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert changes == ["manifest.version", "manifest.min_app_version"]
+    assert manifest["min_app_version"] == "5.4.3"
+    assert manifest["version"] == "1.0.1"
+
+
+def test_update_manifest_to_latest_uses_explicit_version(tmp_path: Path):
+    widget_dir = tmp_path / "widget"
+    widget_dir.mkdir()
+    manifest_path = widget_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps({"name": "Hello", "id": "com.test.hello", "version": "1.0.0"}),
+        encoding="utf-8",
+    )
+
+    changes = update_manifest_to_latest(
+        widget_dir, min_app_version="5.4.3", widget_version="2.0.0"
+    )
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert changes == ["manifest.version", "manifest.min_app_version"]
+    assert manifest["min_app_version"] == "5.4.3"
+    assert manifest["version"] == "2.0.0"
+
+
+def test_update_manifest_to_latest_sets_explicit_version_only(tmp_path: Path):
+    widget_dir = tmp_path / "widget"
+    widget_dir.mkdir()
+    manifest_path = widget_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "name": "Hello",
+                "id": "com.test.hello",
+                "version": "1.0.0",
+                "min_app_version": "5.1.0",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    changes = update_manifest_to_latest(widget_dir, widget_version="1.2.0")
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert changes == ["manifest.version"]
+    assert manifest["version"] == "1.2.0"
+
+
+def test_update_manifest_to_latest_keeps_valid_min_app_version(tmp_path: Path):
+    widget_dir = tmp_path / "widget"
+    widget_dir.mkdir()
+    manifest_path = widget_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "name": "Hello",
+                "id": "com.test.hello",
+                "min_app_version": "5.1.0",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    changes = update_manifest_to_latest(widget_dir, min_app_version="5.4.3")
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert changes == []
+    assert manifest["min_app_version"] == "5.1.0"
+
+
+def test_bump_patch_version():
+    assert bump_patch_version("1.2.3") == "1.2.4"
 
 
 # --- is_semver ---

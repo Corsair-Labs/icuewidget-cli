@@ -72,6 +72,7 @@ def _make_valid_widget(widget_dir: Path) -> None:
         "description": "A test widget",
         "version": "1.0.0",
         "preview_icon": "resources/icon.svg",
+        "min_app_version": "5.45",
         "min_framework_version": "1.0.0",
         "os": [{"platform": "windows"}],
         "supported_devices": [{"type": "dashboard_lcd"}],

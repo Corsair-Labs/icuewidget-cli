@@ -14,6 +14,7 @@ import tinycss2
 from .constants import (
     ALLOWED_DEVICE_TYPES,
     ALLOWED_PLATFORMS,
+    APP_VERSION_RE,
     IDENTIFIER_RE,
     SEMVER_RE,
 )
@@ -71,6 +72,7 @@ def _validate_manifest(widget_dir: Path, manifest_path: Path) -> dict[str, Any]:
         "description",
         "version",
         "preview_icon",
+        "min_app_version",
         "min_framework_version",
     ]:
         _validate_required_string(manifest, key)
@@ -80,6 +82,7 @@ def _validate_manifest(widget_dir: Path, manifest_path: Path) -> dict[str, Any]:
             "manifest.id must contain only letters, digits, dots, and hyphens"
         )
     _validate_semver(manifest["version"], "manifest.version")
+    _validate_app_version(manifest["min_app_version"], "manifest.min_app_version")
     _validate_semver(
         manifest["min_framework_version"], "manifest.min_framework_version"
     )
@@ -536,3 +539,8 @@ def _validate_required_string(manifest: dict[str, Any], key: str) -> None:
 def _validate_semver(value: str, label: str) -> None:
     if not SEMVER_RE.fullmatch(value):
         raise CliError(f"{label} must use semantic version format (for example 1.0.0)")
+
+
+def _validate_app_version(value: str, label: str) -> None:
+    if not APP_VERSION_RE.fullmatch(value):
+        raise CliError(f"{label} must use iCUE version format (for example 5.45)")

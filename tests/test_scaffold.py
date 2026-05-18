@@ -15,6 +15,7 @@ def _make_manifest(widget_name: str = "TestWidget") -> dict:
         "description": "A test widget",
         "version": "1.0.0",
         "preview_icon": "resources/icon.svg",
+        "min_app_version": "5.45",
         "min_framework_version": "1.0.0",
         "os": [{"platform": "windows"}],
         "supported_devices": [{"type": "dashboard_lcd"}],
@@ -47,6 +48,7 @@ def test_scaffold_manifest_content(tmp_path: Path):
     assert written["name"] == "Hello"
     assert written["id"] == "com.test.widget"
     assert written["version"] == "1.0.0"
+    assert written["min_app_version"] == "5.45"
     assert written["os"] == [{"platform": "windows"}]
     assert written["supported_devices"] == [{"type": "dashboard_lcd"}]
 

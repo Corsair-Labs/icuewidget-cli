@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -14,6 +15,8 @@ from rich.table import Table
 from . import __version__
 from .constants import (
     APP_NAME,
+    APP_VERSION_RE,
+    DEFAULT_APP_VERSION,
     DEFAULT_DEVICE_TYPE,
     DEFAULT_FRAMEWORK_VERSION,
     DEFAULT_PLATFORM,
@@ -54,6 +57,7 @@ app = typer.Typer(
         "Examples:\n"
         "  icuewidget init HelloWidget\n"
         "  icuewidget validate HelloWidget\n"
+        "  icuewidget update HelloWidget --min-app-version 5.4.3 --version 1.0.1\n"
         "  icuewidget package HelloWidget"
     ),
 )
@@ -78,7 +82,7 @@ def callback(
         raise typer.Exit()
 
 
-@app.command("validate")
+@app.command("validate", help="Validates widget files and manifest requirements")
 def validate_command(
     path: str = typer.Argument(".", help="Widget directory name or path."),
 ) -> None:
@@ -99,7 +103,7 @@ def validate_command(
     print_warnings(result.warnings)
 
 
-@app.command("package")
+@app.command("package", help="Validates widget and creates an .icuewidget package")
 def package_command(
     path: str = typer.Argument(".", help="Widget directory name or path."),
     output: str | None = typer.Option(
@@ -138,7 +142,71 @@ def package_command(
     print_warnings(result.warnings)
 
 
-@app.command("init")
+@app.command(
+    "update",
+    help="Updates manifest requirements, bumps widget version, and regenerates package",
+)
+def update_command(
+    path: str = typer.Argument(".", help="Widget directory name or path."),
+    min_app_version: str | None = typer.Option(
+        None,
+        "--min-app-version",
+        help="Minimum iCUE version to write when manifest.min_app_version is missing or invalid.",
+        rich_help_panel="Update Options",
+    ),
+    widget_version: str | None = typer.Option(
+        None,
+        "--version",
+        help="Widget manifest version to write. Defaults to incrementing the patch version when updates are applied.",
+        rich_help_panel="Update Options",
+    ),
+    output: str | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output .icuewidget file path when updates are applied.",
+        rich_help_panel="Update Options",
+    ),
+) -> None:
+    widget_dir = resolve_widget_dir(path)
+
+    print_header()
+    console.print()
+    console.print(Panel.fit("Checking widget requirements", border_style="blue"))
+
+    changes = update_manifest_to_latest(widget_dir, min_app_version, widget_version)
+    result = run_validation(widget_dir)
+
+    if not changes:
+        console.print()
+        console.print(Panel.fit("[green]Widget is up to date[/green]", border_style="green"))
+        print_warnings(result.warnings)
+        return
+
+    output_path = (
+        Path(output).expanduser().resolve()
+        if output
+        else default_output_path(widget_dir, result.manifest)
+    )
+    if output_path.suffix != ".icuewidget":
+        output_path = output_path.with_suffix(".icuewidget")
+
+    create_package(widget_dir, output_path)
+
+    console.print()
+    console.print(
+        Panel.fit("[green]Widget updated and package regenerated[/green]", border_style="green")
+    )
+
+    table = Table(show_header=False, box=None, pad_edge=False)
+    table.add_row("Widget", str(result.manifest["name"]))
+    table.add_row("Updated", ", ".join(changes))
+    table.add_row("Output", str(output_path))
+    console.print(table)
+    print_warnings(result.warnings)
+
+
+@app.command("init", help="Creates a new widget from the starter template")
 def init_command(
     path: str = typer.Argument(
         ".", help="Widget directory name or path to create."),
@@ -181,6 +249,12 @@ def init_command(
     version = prompt_validated(
         "Version", "1.0.0", is_semver, "Use semantic version format like 1.0.0."
     )
+    min_app_version = prompt_validated(
+        "Minimum iCUE version required",
+        DEFAULT_APP_VERSION,
+        is_app_version,
+        "Use iCUE version format like 5.45 or 5.45.104.",
+    )
     preview_icon = prompt("Preview icon path", "resources/icon.svg")
 
     manifest = {
@@ -190,6 +264,7 @@ def init_command(
         "description": description,
         "version": version,
         "preview_icon": preview_icon,
+        "min_app_version": min_app_version,
         "min_framework_version": DEFAULT_FRAMEWORK_VERSION,
         "os": [{"platform": DEFAULT_PLATFORM}],
         "supported_devices": [{"type": DEFAULT_DEVICE_TYPE}],
@@ -213,6 +288,7 @@ def init_command(
     summary_table = Table(show_header=False, box=None, pad_edge=False)
     summary_table.add_row("Directory", str(target_dir))
     summary_table.add_row("Widget id", widget_id)
+    summary_table.add_row("Minimum iCUE", min_app_version)
     summary_table.add_row("Platform", DEFAULT_PLATFORM)
     summary_table.add_row("Device", DEFAULT_DEVICE_TYPE)
     console.print(summary_table)
@@ -278,6 +354,73 @@ def run_validation(widget_dir: Path) -> ValidationResult:
         assert False, "unreachable"  # help static analysers
 
 
+def update_manifest_to_latest(
+    widget_dir: Path,
+    min_app_version: str | None = None,
+    widget_version: str | None = None,
+) -> list[str]:
+    manifest_path = widget_dir / "manifest.json"
+    if not manifest_path.exists():
+        raise_cli_error(f"manifest.json not found: {manifest_path}")
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise_cli_error(f"manifest.json is not valid JSON: {exc.msg}")
+
+    if not isinstance(manifest, dict):
+        raise_cli_error("manifest.json must contain a JSON object")
+
+    changes: list[str] = []
+    requirement_changes: list[str] = []
+    current_min_app_version = manifest.get("min_app_version")
+    if not isinstance(current_min_app_version, str) or not is_semver(
+        current_min_app_version.strip()
+    ):
+        if min_app_version is not None:
+            value = min_app_version.strip()
+            if not is_app_version(value):
+                raise_cli_error("--min-app-version must use iCUE version format like 5.45 or 5.45.104.")
+        else:
+            value = prompt_validated(
+                "Minimum iCUE version required",
+                DEFAULT_APP_VERSION,
+                is_app_version,
+                "Use iCUE version format like 5.45 or 5.45.104.",
+            )
+        manifest["min_app_version"] = value
+        requirement_changes.append("manifest.min_app_version")
+
+    if widget_version is not None:
+        version_value = widget_version.strip()
+        if not is_semver(version_value):
+            raise_cli_error("--version must use semantic version format like 1.0.1.")
+        if manifest.get("version") != version_value:
+            manifest["version"] = version_value
+            changes.append("manifest.version")
+    elif requirement_changes:
+        current_version = manifest.get("version")
+        if not isinstance(current_version, str) or not is_semver(current_version.strip()):
+            raise_cli_error(
+                "manifest.version must use semantic version format like 1.0.0, "
+                "or pass --version to set it."
+            )
+        manifest["version"] = bump_patch_version(current_version.strip())
+        changes.append("manifest.version")
+
+    changes.extend(requirement_changes)
+
+    if changes:
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+    return changes
+
+
+def bump_patch_version(value: str) -> str:
+    major, minor, patch = value.split(".")
+    return f"{major}.{minor}.{int(patch) + 1}"
+
+
 def raise_cli_error(message: str) -> NoReturn:
     console.print(f"[red]Error:[/red] {message}")
     raise typer.Exit(code=1)
@@ -285,6 +428,10 @@ def raise_cli_error(message: str) -> NoReturn:
 
 def is_semver(value: str) -> bool:
     return bool(SEMVER_RE.fullmatch(value))
+
+
+def is_app_version(value: str) -> bool:
+    return bool(APP_VERSION_RE.fullmatch(value))
 
 
 def validate_identifier(value: str) -> bool:

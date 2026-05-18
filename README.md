@@ -10,9 +10,10 @@ The CLI uses:
 
 ## Commands
 
-- `icuewidget init [path]`
-- `icuewidget validate [path]`
-- `icuewidget package [path]`
+- `icuewidget init [path]` - Creates a new widget from the starter template.
+- `icuewidget validate [path]` - Validates widget files and manifest requirements.
+- `icuewidget update [path]` - Updates manifest requirements, bumps widget version, and regenerates the `.icuewidget` package.
+- `icuewidget package [path]` - Validates widget and creates an `.icuewidget` package.
 - `icuewidget --help`
 - `icuewidget --version`
 
