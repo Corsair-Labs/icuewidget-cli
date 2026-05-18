@@ -43,6 +43,48 @@ class CustomGroup(typer.core.TyperGroup):
             "[-v | --version] [-h | --help] <command> [<args>]",
         )
 
+    def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        if not typer.core.HAS_RICH or self.rich_markup_mode is None:
+            return super().format_help(ctx, formatter)
+
+        from typer.rich_utils import _get_rich_console
+
+        help_console = _get_rich_console()
+        help_console.print(
+            f"[yellow]Usage:[/yellow] [bold]{APP_NAME}[/bold] [-v | --version] [-h | --help] <command> [<args>]"
+        )
+        help_console.print()
+
+        if self.help:
+            help_console.print(self.help)
+            help_console.print()
+
+        options = Table.grid(padding=(0, 2))
+        options.add_column(style="bold cyan", no_wrap=True)
+        options.add_column(style="bold green", no_wrap=True)
+        options.add_column()
+        options.add_row("--version", "-v", "Show the CLI version and exit.")
+        options.add_row("--help", "-h", "Show this message and exit.")
+        help_console.print(Panel.fit(options, title="Options", title_align="left", border_style="dim"))
+
+        commands = Table.grid(padding=(0, 2))
+        commands.add_column(style="bold cyan", no_wrap=True)
+        commands.add_column()
+        commands.add_row("validate", "Validates widget files and manifest requirements")
+        commands.add_row("package", "Validates widget and creates an .icuewidget package")
+        commands.add_row("update", "Updates manifest requirements, bumps widget version, and regenerates package")
+        commands.add_row("init", "Creates a new widget from the starter template")
+        help_console.print(Panel.fit(commands, title="Commands", title_align="left", border_style="dim"))
+
+        examples = Table.grid(padding=(0, 2))
+        examples.add_column(style="cyan", no_wrap=True)
+        examples.add_row("icuewidget init HelloWidget")
+        examples.add_row("icuewidget validate HelloWidget")
+        examples.add_row("icuewidget update HelloWidget --min-app-version 5.45")
+        examples.add_row("icuewidget update HelloWidget --version 1.0.1")
+        examples.add_row("icuewidget package HelloWidget")
+        help_console.print(Panel.fit(examples, title="Examples", title_align="left", border_style="dim"))
+
 
 console = Console()
 app = typer.Typer(
@@ -57,7 +99,8 @@ app = typer.Typer(
         "Examples:\n"
         "  icuewidget init HelloWidget\n"
         "  icuewidget validate HelloWidget\n"
-        "  icuewidget update HelloWidget --min-app-version 5.4.3 --version 1.0.1\n"
+        "  icuewidget update HelloWidget --min-app-version 5.45\n"
+        "  icuewidget update HelloWidget --version 1.0.1\n"
         "  icuewidget package HelloWidget"
     ),
 )
