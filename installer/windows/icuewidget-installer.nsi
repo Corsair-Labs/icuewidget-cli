@@ -16,7 +16,6 @@
 !define PRODUCT_NAME "iCUE Widget CLI"
 !define PRODUCT_PUBLISHER "Corsair"
 !define PRODUCT_BRAND "CORSAIR"
-!define PRODUCT_WEB_SITE "https://www.corsair.com"
 !ifndef BRAND_ASSET_DIR
 !define BRAND_ASSET_DIR "installer\windows\assets"
 !endif
@@ -44,8 +43,6 @@ Unicode true
 !define MUI_WELCOMEPAGE_TEXT "This wizard installs ${PRODUCT_NAME} for your user account and adds it to your PATH."
 !define MUI_FINISHPAGE_TITLE "${PRODUCT_NAME} Installed"
 !define MUI_FINISHPAGE_TEXT "${PRODUCT_NAME} is ready to use from any new terminal window."
-!define MUI_FINISHPAGE_LINK "Visit ${PRODUCT_BRAND}"
-!define MUI_FINISHPAGE_LINK_LOCATION "${PRODUCT_WEB_SITE}"
 
 ; Prefer official CORSAIR branding assets from this repository.
 !if /FileExists "${BRAND_ICON}"
