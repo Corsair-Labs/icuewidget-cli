@@ -16,6 +16,7 @@ WINDOWS_INSTALLER_SCRIPT = ROOT / "installer" / "windows" / "icuewidget-installe
 WINDOWS_INSTALLER_ASSETS_DIR = ROOT / "installer" / "windows" / "assets"
 WINDOWS_STAGED_ASSETS_DIR = BUILD_DIR / "installer-windows-assets"
 WINDOWS_SIDE_IMAGE = "InstallerSideImage.bmp"
+WINDOWS_HEADER_IMAGE = "CORSAIRLogo2020_horiz_K.bmp"
 
 
 def main() -> int:
@@ -127,12 +128,18 @@ def stage_windows_installer_assets() -> Path:
     clean_paths(WINDOWS_STAGED_ASSETS_DIR)
     shutil.copytree(WINDOWS_INSTALLER_ASSETS_DIR, WINDOWS_STAGED_ASSETS_DIR)
 
-    side_image = WINDOWS_STAGED_ASSETS_DIR / WINDOWS_SIDE_IMAGE
-    if not side_image.exists():
+    required_images = {
+        "side bitmap": WINDOWS_SIDE_IMAGE,
+        "header bitmap": WINDOWS_HEADER_IMAGE,
+    }
+    for label, filename in required_images.items():
+        image_path = WINDOWS_STAGED_ASSETS_DIR / filename
+        if image_path.exists():
+            continue
         raise SystemExit(
-            "Missing pre-rendered NSIS side bitmap:\n"
-            f"  {WINDOWS_INSTALLER_ASSETS_DIR / WINDOWS_SIDE_IMAGE}\n"
-            "Regenerate it from InstallerSideImage.png and commit the BMP asset."
+            f"Missing pre-rendered NSIS {label}:\n"
+            f"  {WINDOWS_INSTALLER_ASSETS_DIR / filename}\n"
+            "Commit the BMP asset before building the installer."
         )
 
     return WINDOWS_STAGED_ASSETS_DIR

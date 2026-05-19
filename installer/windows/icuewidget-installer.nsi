@@ -23,8 +23,7 @@
 
 !define BRAND_ICON "${BRAND_ASSET_DIR}\corsair-cli.ico"
 !define BRAND_WIZARD_BITMAP "${BRAND_ASSET_DIR}\InstallerSideImage.bmp"
-!define LEGACY_BRAND_WIZARD_BITMAP "${BRAND_ASSET_DIR}\corsair-wizard.bmp"
-!define BRAND_HEADER_BITMAP "${BRAND_ASSET_DIR}\corsair-header.bmp"
+!define BRAND_HEADER_BITMAP "${BRAND_ASSET_DIR}\CORSAIRLogo2020_horiz_K.bmp"
 !define NSIS_GRAPHICS_DIR "${NSISDIR}\Contrib\Graphics"
 
 Name "${PRODUCT_NAME} ${VERSION}"
@@ -65,12 +64,8 @@ Unicode true
 !if /FileExists "${BRAND_WIZARD_BITMAP}"
   !define MUI_WELCOMEFINISHPAGE_BITMAP "${BRAND_WIZARD_BITMAP}"
 !else
-  !if /FileExists "${LEGACY_BRAND_WIZARD_BITMAP}"
-    !define MUI_WELCOMEFINISHPAGE_BITMAP "${LEGACY_BRAND_WIZARD_BITMAP}"
-  !else
-    !if /FileExists "${NSIS_GRAPHICS_DIR}\Wizard\orange.bmp"
-      !define MUI_WELCOMEFINISHPAGE_BITMAP "${NSIS_GRAPHICS_DIR}\Wizard\orange.bmp"
-    !endif
+  !if /FileExists "${NSIS_GRAPHICS_DIR}\Wizard\orange.bmp"
+    !define MUI_WELCOMEFINISHPAGE_BITMAP "${NSIS_GRAPHICS_DIR}\Wizard\orange.bmp"
   !endif
 !endif
 
