@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import os
 import platform
 import shutil
 import subprocess
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 from icuewidget_cli.version import resolve_version
 
@@ -17,6 +17,12 @@ WINDOWS_INSTALLER_ASSETS_DIR = ROOT / "installer" / "windows" / "assets"
 WINDOWS_STAGED_ASSETS_DIR = BUILD_DIR / "installer-windows-assets"
 WINDOWS_SIDE_IMAGE = "InstallerSideImage.bmp"
 WINDOWS_HEADER_IMAGE = "CORSAIRLogo2020_horiz_K.bmp"
+MACOS_PACKAGE_IDENTIFIER = "com.corsair.icuewidget-cli"
+MACOS_INSTALLER_RESOURCES_DIR = ROOT / "installer" / "macos" / "resources"
+MACOS_STAGED_RESOURCES_DIR = BUILD_DIR / "installer-macos-resources"
+MACOS_COMPONENT_PACKAGE = BUILD_DIR / "icuewidget-cli-component.pkg"
+MACOS_DISTRIBUTION_XML = BUILD_DIR / "icuewidget-cli-distribution.xml"
+CORSAIR_LOGO_SOURCE = WINDOWS_INSTALLER_ASSETS_DIR / "CORSAIRLogo2020_horiz_K.png"
 
 
 def main() -> int:
@@ -61,9 +67,14 @@ def build_macos_installer(
         raise SystemExit(
             "pkgbuild is not available. Run this script on macOS with Xcode command line tools installed."
         )
+    if shutil.which("productbuild") is None:
+        raise SystemExit(
+            "productbuild is not available. Run this script on macOS with Xcode command line tools installed."
+        )
 
     staging_root = BUILD_DIR / "installer-macos-root"
-    clean_paths(staging_root, output_path)
+    resources_dir = stage_macos_installer_resources()
+    clean_paths(staging_root, MACOS_COMPONENT_PACKAGE, MACOS_DISTRIBUTION_XML, output_path)
 
     bin_dir = staging_root / "usr" / "local" / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
@@ -72,19 +83,78 @@ def build_macos_installer(
     shutil.copy2(binary_path, installed_binary)
     installed_binary.chmod(0o755)
 
-    command = [
+    component_command = [
         "pkgbuild",
         "--root",
         str(staging_root),
         "--identifier",
-        "com.corsair.icuewidget-cli",
+        MACOS_PACKAGE_IDENTIFIER,
         "--version",
         version,
         "--install-location",
         "/",
+        str(MACOS_COMPONENT_PACKAGE),
+    ]
+    subprocess.run(component_command, cwd=ROOT, check=True)
+
+    write_macos_distribution_xml(version=version, component_package=MACOS_COMPONENT_PACKAGE)
+
+    product_command = [
+        "productbuild",
+        "--distribution",
+        str(MACOS_DISTRIBUTION_XML),
+        "--resources",
+        str(resources_dir),
+        "--package-path",
+        str(MACOS_COMPONENT_PACKAGE.parent),
         str(output_path),
     ]
-    subprocess.run(command, cwd=ROOT, check=True)
+    subprocess.run(product_command, cwd=ROOT, check=True)
+
+
+def stage_macos_installer_resources() -> Path:
+    if not MACOS_INSTALLER_RESOURCES_DIR.exists():
+        raise SystemExit(
+            f"macOS installer resources directory not found: {MACOS_INSTALLER_RESOURCES_DIR}"
+        )
+    if not CORSAIR_LOGO_SOURCE.exists():
+        raise SystemExit(
+            f"CORSAIR logo source not found: {CORSAIR_LOGO_SOURCE}"
+        )
+
+    clean_paths(MACOS_STAGED_RESOURCES_DIR)
+    shutil.copytree(MACOS_INSTALLER_RESOURCES_DIR, MACOS_STAGED_RESOURCES_DIR)
+    shutil.copy2(CORSAIR_LOGO_SOURCE, MACOS_STAGED_RESOURCES_DIR / "corsair-logo.png")
+
+    return MACOS_STAGED_RESOURCES_DIR
+
+
+def write_macos_distribution_xml(*, version: str, component_package: Path) -> None:
+    component_package_name = escape(component_package.name)
+    escaped_version = escape(version)
+    escaped_package_id = escape(MACOS_PACKAGE_IDENTIFIER)
+
+    MACOS_DISTRIBUTION_XML.parent.mkdir(parents=True, exist_ok=True)
+    MACOS_DISTRIBUTION_XML.write_text(
+        f'''<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="1">
+  <title>CORSAIR iCUE Widget CLI</title>
+  <options customize="never" require-scripts="false"/>
+  <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+  <background file="corsair-logo.png" mime-type="image/png" scaling="proportional" alignment="bottomleft"/>
+  <welcome file="welcome.html" mime-type="text/html"/>
+  <readme file="readme.html" mime-type="text/html"/>
+  <choices-outline>
+    <line choice="default"/>
+  </choices-outline>
+  <choice id="default" title="iCUE Widget CLI" description="Command-line tooling for CORSAIR iCUE widgets.">
+    <pkg-ref id="{escaped_package_id}"/>
+  </choice>
+  <pkg-ref id="{escaped_package_id}" version="{escaped_version}" onConclusion="none">{component_package_name}</pkg-ref>
+</installer-gui-script>
+''',
+        encoding="utf-8",
+    )
 
 
 def build_windows_installer(

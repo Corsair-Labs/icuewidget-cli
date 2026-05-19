@@ -43,6 +43,17 @@ Artifacts are written to:
 - `release/icuewidget-<version>-macos-installer.pkg`
 - `release/icuewidget-<version>-windows-installer.exe`
 
+### macOS installer branding
+
+macOS packaging uses `pkgbuild` for the installable payload and `productbuild`
+for the final installer UI. The product package includes CORSAIR-branded
+resources:
+
+- installer title: `CORSAIR iCUE Widget CLI`
+- branded welcome and readme pages: `installer/macos/resources/welcome.html` and `installer/macos/resources/readme.html`
+- shared CORSAIR logo asset staged from `installer/windows/assets/CORSAIRLogo2020_horiz_K.png`
+- install location: `/usr/local/bin/icuewidget`
+
 ### Windows installer branding
 
 Windows packaging uses official CORSAIR branding assets:
