@@ -1,0 +1,25 @@
+project:
+  name: 'icuewidget-cli'
+
+version:
+  app: '0.4'
+  patch_env: 'BUILD_NUMBER'
+
+runtime:
+  node: '20'
+
+commands:
+  install: 'npm ci'
+  test: 'npm test'
+  check: 'npm run check'
+  package: 'npm pack --dry-run'
+  build: 'npm run build'
+
+environment:
+  CLI_BUILD_PATCH: '${BUILD_NUMBER}'
+  CLI_PACKAGE_SPEC: '.'
+
+artifacts:
+  - 'release/*.pkg'
+  - 'release/*.exe'
+  - '*.tgz'
