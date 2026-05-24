@@ -1,0 +1,82 @@
+#!/bin/sh
+set -eu
+
+# Best-effort cleanup for the previous Python-distributed CLI before the
+# standalone Node CLI binary is installed by this package.
+TARGET="/usr/local/bin/icuewidget"
+
+warn_duplicate_npm_cli() {
+  FOUND=""
+
+  if command -v npm >/dev/null 2>&1; then
+    PREFIX="$(npm prefix -g 2>/dev/null || true)"
+    if [ -n "$PREFIX" ]; then
+      for CANDIDATE in "$PREFIX/icuewidget" "$PREFIX/bin/icuewidget"; do
+        if [ -e "$CANDIDATE" ]; then
+          FOUND="$FOUND
+$CANDIDATE"
+        fi
+      done
+    fi
+  fi
+
+  if command -v which >/dev/null 2>&1; then
+    for CANDIDATE in $(which -a icuewidget 2>/dev/null || true); do
+      [ "$CANDIDATE" = "$TARGET" ] && continue
+      if [ -L "$CANDIDATE" ]; then
+        LINK_TARGET="$(readlink "$CANDIDATE" 2>/dev/null || true)"
+        case "$LINK_TARGET" in
+          *npm*|*node_modules*|*@corsair/icuewidget-cli*|*node-bin/icuewidget*)
+            FOUND="$FOUND
+$CANDIDATE -> $LINK_TARGET"
+            ;;
+        esac
+      elif [ -f "$CANDIDATE" ] && head -n 10 "$CANDIDATE" 2>/dev/null | grep -Eq '@corsair/icuewidget-cli|node-bin/icuewidget|node_modules'; then
+        FOUND="$FOUND
+$CANDIDATE"
+      fi
+    done
+  fi
+
+  if [ -n "$FOUND" ]; then
+    cat >&2 <<EOF
+Warning: another npm-installed icuewidget command was detected:$FOUND
+
+The native installer will not remove it. If both remain installed, your PATH
+order decides which version runs. To avoid confusion, uninstall one copy, for
+example:
+
+  npm uninstall -g @corsair/icuewidget-cli
+
+EOF
+  fi
+}
+
+warn_duplicate_npm_cli || true
+
+if [ -L "$TARGET" ]; then
+  LINK_TARGET="$(readlink "$TARGET" || true)"
+  case "$LINK_TARGET" in
+    *python*|*Python*|*pipx*|*icuewidget_cli*|*/.local/bin/*|*/.venv/*)
+      rm -f "$TARGET" || true
+      ;;
+  esac
+elif [ -f "$TARGET" ]; then
+  if head -n 5 "$TARGET" 2>/dev/null | grep -Eqi 'python|icuewidget_cli'; then
+    rm -f "$TARGET" || true
+  fi
+fi
+
+if command -v pipx >/dev/null 2>&1; then
+  pipx uninstall icuewidget-cli >/dev/null 2>&1 || true
+fi
+
+if command -v uv >/dev/null 2>&1; then
+  uv tool uninstall icuewidget-cli >/dev/null 2>&1 || true
+fi
+
+if command -v python3 >/dev/null 2>&1; then
+  python3 -m pip uninstall --user -y icuewidget-cli >/dev/null 2>&1 || true
+fi
+
+exit 0

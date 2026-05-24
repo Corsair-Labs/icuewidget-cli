@@ -1,47 +1,25 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <style>
-      body {
-        color: #1f1f1f;
-        font: -apple-system-body;
-        margin: 0;
-        padding: 22px 28px;
-      }
-      .brand-mark {
-        display: block;
-        height: 30px;
-        margin-bottom: 22px;
-        width: auto;
-      }
-      h1 {
-        font: -apple-system-title2;
-        font-weight: 700;
-        margin: 0 0 12px;
-      }
-      ul {
-        margin-top: 8px;
-        padding-left: 22px;
-      }
-      li {
-        margin-bottom: 8px;
-      }
-      code {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      }
-    </style>
-  </head>
-  <body>
-    <img class="brand-mark" src="corsair-logo.png" alt="CORSAIR">
-    <h1>Installation details</h1>
-    <ul>
-      <li>Installs <code>icuewidget</code> into <code>/usr/local/bin</code>.</li>
-      <li>Requires macOS with standard Apple installer tooling.</li>
-      <li>After installation, open a new Terminal window and run <code>icuewidget --help</code>.</li>
-    </ul>
-    <p>
-      Publisher: Corsair. Product: CORSAIR iCUE Widget CLI.
-    </p>
-  </body>
+<html>
+<head>
+  <style>
+    body { color: #15171c; }
+    @media (prefers-color-scheme: dark) {
+      body { color: #f2f5f7; }
+      code { color: #f2f5f7; }
+    }
+  </style>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #15171c; font-size: 13px; line-height: 1.42; margin: 0;">
+  <div style="padding: 2px 4px 0;">
+  <h2 style="margin: 0 0 8px; font-size: 18px; line-height: 1.2; font-weight: 600;">iCUE Widget CLI</h2>
+  <p style="margin: 0 0 10px;">Create, validate, update, and package CORSAIR iCUE widgets from a native command-line tool.</p>
+  <ul style="margin: 0 0 10px; padding-left: 20px;">
+    <li><code>icuewidget init MyWidget</code></li>
+    <li><code>icuewidget validate MyWidget</code></li>
+    <li><code>icuewidget update MyWidget --min-app-version 5.45</code></li>
+    <li><code>icuewidget package MyWidget</code></li>
+  </ul>
+  <p style="margin: 0;">The installer also performs best-effort cleanup of older Python-distributed versions before installing the standalone Node CLI binary.</p>
+  </div>
+</body>
 </html>
