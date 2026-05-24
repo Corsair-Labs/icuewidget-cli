@@ -1,61 +1,47 @@
+Unicode true
 !include "MUI2.nsh"
-!include "WinMessages.nsh"
+!include "FileFunc.nsh"
+!include "LogicLib.nsh"
 
-!ifndef VERSION
-!error "VERSION define is required"
+!ifndef PRODUCT_VERSION
+  !define PRODUCT_VERSION "1.0.0"
 !endif
-
-!ifndef BINARY_PATH
-!error "BINARY_PATH define is required"
+!ifndef CLI_BINARY
+  !define CLI_BINARY "..\..\dist\bin\icuewidget.exe"
 !endif
-
-!ifndef OUTFILE
-!error "OUTFILE define is required"
+!ifndef OUT_FILE
+  !define OUT_FILE "..\..\release\icuewidget-${PRODUCT_VERSION}-windows-installer.exe"
+!endif
+!ifndef BRAND_ASSET_DIR
+  !define BRAND_ASSET_DIR "${__FILEDIR__}\assets"
 !endif
 
 !define PRODUCT_NAME "iCUE Widget CLI"
 !define PRODUCT_PUBLISHER "Corsair"
 !define PRODUCT_BRAND "CORSAIR"
-!ifndef BRAND_ASSET_DIR
-!define BRAND_ASSET_DIR "installer\windows\assets"
-!endif
-
+!define INSTALL_REG_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define BRAND_ICON "${BRAND_ASSET_DIR}\corsair-cli.ico"
 !define BRAND_WIZARD_BITMAP "${BRAND_ASSET_DIR}\InstallerSideImage.bmp"
 !define BRAND_HEADER_BITMAP "${BRAND_ASSET_DIR}\CORSAIRLogo2020_horiz_K.bmp"
 !define NSIS_GRAPHICS_DIR "${NSISDIR}\Contrib\Graphics"
 
-Name "${PRODUCT_NAME} ${VERSION}"
-OutFile "${OUTFILE}"
-BrandingText "${PRODUCT_BRAND}"
-
-InstallDir "$LOCALAPPDATA\Programs\iCUEWidgetCLI"
-InstallDirRegKey HKCU "Software\Corsair\iCUEWidgetCLI" "InstallDir"
-
+Name "${PRODUCT_NAME}"
+OutFile "${OUT_FILE}"
+InstallDir "$LOCALAPPDATA\Programs\icuewidget-cli"
 RequestExecutionLevel user
-Unicode true
+SetCompressor /SOLID lzma
+ShowInstDetails show
+ShowUnInstDetails show
 
 !define MUI_ABORTWARNING
-!define MUI_HEADERIMAGE
-!define MUI_HEADERIMAGE_RIGHT
-!define MUI_HEADER_TRANSPARENT_TEXT
 !define MUI_WELCOMEPAGE_TITLE "Install ${PRODUCT_NAME}"
 !define MUI_WELCOMEPAGE_TEXT "This wizard installs ${PRODUCT_NAME} for your user account and adds it to your PATH."
 !define MUI_FINISHPAGE_TITLE "${PRODUCT_NAME} Installed"
 !define MUI_FINISHPAGE_TEXT "${PRODUCT_NAME} is ready to use from any new terminal window."
 
-; Prefer official CORSAIR branding assets from this repository.
 !if /FileExists "${BRAND_ICON}"
   !define MUI_ICON "${BRAND_ICON}"
   !define MUI_UNICON "${BRAND_ICON}"
-!else
-  ; Fallback if branded icon files are unavailable.
-  !if /FileExists "${NSIS_GRAPHICS_DIR}\Icons\orange-install.ico"
-    !define MUI_ICON "${NSIS_GRAPHICS_DIR}\Icons\orange-install.ico"
-  !endif
-  !if /FileExists "${NSIS_GRAPHICS_DIR}\Icons\orange-uninstall.ico"
-    !define MUI_UNICON "${NSIS_GRAPHICS_DIR}\Icons\orange-uninstall.ico"
-  !endif
 !endif
 
 !if /FileExists "${BRAND_WIZARD_BITMAP}"
@@ -67,9 +53,13 @@ Unicode true
 !endif
 
 !if /FileExists "${BRAND_HEADER_BITMAP}"
+  !define MUI_HEADERIMAGE
+  !define MUI_HEADERIMAGE_RIGHT
   !define MUI_HEADERIMAGE_BITMAP "${BRAND_HEADER_BITMAP}"
 !else
   !if /FileExists "${NSIS_GRAPHICS_DIR}\Header\orange.bmp"
+    !define MUI_HEADERIMAGE
+    !define MUI_HEADERIMAGE_RIGHT
     !define MUI_HEADERIMAGE_BITMAP "${NSIS_GRAPHICS_DIR}\Header\orange.bmp"
   !endif
 !endif
@@ -84,125 +74,99 @@ Unicode true
 
 !insertmacro MUI_LANGUAGE "English"
 
-!macro DefinePathListRemoveEntry FUNCNAME LABEL_PREFIX
-Function ${FUNCNAME}
-  ; Stack input (top first):
-  ;   $1 -> entry to remove
-  ;   $0 -> PATH list
-  ; Returns cleaned PATH list on stack top.
-  Exch $1
-  Exch
-  Exch $0
-
-  Push $2
-  Push $3
-  Push $4
-  Push $5
-  Push $6
-
-  StrCpy $2 $0
-  StrCpy $3 ""
-  StrCpy $4 ""
-  StrCpy $6 "$1\"
-
-  ${LABEL_PREFIX}PathListLoop:
-    StrCpy $5 $2 1
-    StrCmp $5 "" ${LABEL_PREFIX}PathListFinalize
-    StrCmp $5 ";" ${LABEL_PREFIX}PathListProcessToken
-    StrCpy $3 "$3$5"
-    StrCpy $2 $2 "" 1
-    Goto ${LABEL_PREFIX}PathListLoop
-
-  ${LABEL_PREFIX}PathListProcessToken:
-    StrCmp $3 "" ${LABEL_PREFIX}PathListAfterToken
-    StrCmp $3 $1 ${LABEL_PREFIX}PathListAfterToken
-    StrCmp $3 $6 ${LABEL_PREFIX}PathListAfterToken
-    StrCmp $4 "" 0 +2
-    StrCpy $4 "$3"
-    StrCmp $4 "$3" ${LABEL_PREFIX}PathListAfterToken
-    StrCpy $4 "$4;$3"
-
-  ${LABEL_PREFIX}PathListAfterToken:
-    StrCpy $3 ""
-    StrCpy $2 $2 "" 1
-    Goto ${LABEL_PREFIX}PathListLoop
-
-  ${LABEL_PREFIX}PathListFinalize:
-    StrCmp $3 "" ${LABEL_PREFIX}PathListDone
-    StrCmp $3 $1 ${LABEL_PREFIX}PathListDone
-    StrCmp $3 $6 ${LABEL_PREFIX}PathListDone
-    StrCmp $4 "" 0 +2
-    StrCpy $4 "$3"
-    StrCmp $4 "$3" ${LABEL_PREFIX}PathListDone
-    StrCpy $4 "$4;$3"
-
-  ${LABEL_PREFIX}PathListDone:
-    StrCpy $8 $4
-    Pop $6
-    Pop $5
-    Pop $4
-    Pop $3
-    Pop $2
-    Pop $0
-    Pop $1
-    Push $8
-FunctionEnd
-!macroend
-
-!insertmacro DefinePathListRemoveEntry PathListRemoveEntry ""
-!insertmacro DefinePathListRemoveEntry un.PathListRemoveEntry "UN_"
-
-Section "Install"
-  SetOutPath "$INSTDIR\bin"
-  File "/oname=icuewidget.exe" "${BINARY_PATH}"
-
-  WriteRegStr HKCU "Software\Corsair\iCUEWidgetCLI" "InstallDir" "$INSTDIR"
+Section "Install" SEC01
+  SetOutPath "$INSTDIR"
+  Call CleanupLegacyPythonCli
+  Call WarnDuplicateNpmCli
+  File /oname=icuewidget.exe "${CLI_BINARY}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-  ReadRegStr $0 HKCU "Environment" "Path"
-  Push "$0"
-  Push "$INSTDIR\bin"
-  Call PathListRemoveEntry
-  Pop $1
+  WriteRegStr HKCU "${INSTALL_REG_KEY}" "DisplayName" "${PRODUCT_NAME}"
+  WriteRegStr HKCU "${INSTALL_REG_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
+  WriteRegStr HKCU "${INSTALL_REG_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
+  WriteRegStr HKCU "${INSTALL_REG_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKCU "${INSTALL_REG_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
+  WriteRegDWORD HKCU "${INSTALL_REG_KEY}" "NoModify" 1
+  WriteRegDWORD HKCU "${INSTALL_REG_KEY}" "NoRepair" 1
 
-  StrCmp $1 "" path_set_only path_append
-  path_set_only:
-    StrCpy $2 "$INSTDIR\bin"
-    Goto write_path
-
-  path_append:
-    StrCpy $2 "$1;$INSTDIR\bin"
-
-  write_path:
-    WriteRegExpandStr HKCU "Environment" "Path" "$2"
-    SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
-
+  Call AddToPath
 SectionEnd
 
 Section "Uninstall"
-  ReadRegStr $0 HKCU "Environment" "Path"
-  StrCmp $0 "" path_cleanup_done
-
-  Push "$0"
-  Push "$INSTDIR\bin"
-  Call un.PathListRemoveEntry
-  Pop $1
-
-  StrCmp $1 "" clear_user_path write_user_path
-  clear_user_path:
-    DeleteRegValue HKCU "Environment" "Path"
-    Goto notify_environment_update
-
-  write_user_path:
-    WriteRegExpandStr HKCU "Environment" "Path" "$1"
-
-  notify_environment_update:
-    SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
-
-  path_cleanup_done:
-  Delete "$INSTDIR\bin\icuewidget.exe"
+  Call un.RemoveFromPath
+  Delete "$INSTDIR\icuewidget.exe"
   Delete "$INSTDIR\Uninstall.exe"
-  RMDir "$INSTDIR\bin"
   RMDir "$INSTDIR"
-  DeleteRegKey HKCU "Software\Corsair\iCUEWidgetCLI"
+  DeleteRegKey HKCU "${INSTALL_REG_KEY}"
 SectionEnd
+
+Function AddToPath
+  ReadRegStr $0 HKCU "Environment" "Path"
+  ${If} $0 == ""
+    WriteRegExpandStr HKCU "Environment" "Path" "$INSTDIR"
+  ${Else}
+    ${StrStr} $1 "$0" "$INSTDIR"
+    ${If} $1 == ""
+      WriteRegExpandStr HKCU "Environment" "Path" "$0;$INSTDIR"
+    ${EndIf}
+  ${EndIf}
+  SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
+FunctionEnd
+
+Function CleanupLegacyPythonCli
+  ; Best-effort cleanup for Python/pipx/uv-installed versions. All commands are
+  ; allowed to fail so installer success never depends on Python being present.
+  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = ''SilentlyContinue''; if (Get-Command pipx -ErrorAction SilentlyContinue) { pipx uninstall icuewidget-cli | Out-Null }; if (Get-Command uv -ErrorAction SilentlyContinue) { uv tool uninstall icuewidget-cli | Out-Null }; $paths = @(where.exe icuewidget 2>$null); foreach ($p in $paths) { if (-not $p) { continue }; if ($p -like "$env:LOCALAPPDATA\Programs\icuewidget-cli\*") { continue }; $text = Get-Content -LiteralPath $p -Raw -ErrorAction SilentlyContinue; if (($p -match ''Python|pipx|Scripts\\icuewidget'') -or ($text -match ''python|icuewidget_cli'')) { Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue } }"'
+FunctionEnd
+
+Function WarnDuplicateNpmCli
+  ; Detect npm-installed copies without removing them. The standalone installer
+  ; can coexist with npm, but PATH order decides which `icuewidget` runs.
+  nsExec::ExecToStack 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = ''SilentlyContinue''; $found = @(); if (Get-Command npm -ErrorAction SilentlyContinue) { $prefix = npm prefix -g 2>$null; if ($prefix) { foreach ($name in @(''icuewidget.cmd'', ''icuewidget.ps1'', ''icuewidget'')) { $candidate = Join-Path $prefix $name; if (Test-Path -LiteralPath $candidate) { $found += $candidate } } } }; foreach ($p in @(where.exe icuewidget 2>$null)) { if (-not $p) { continue }; if ($p -like "$env:LOCALAPPDATA\\Programs\\icuewidget-cli\\*") { continue }; $text = Get-Content -LiteralPath $p -Raw -ErrorAction SilentlyContinue; if (($p -match ''\\npm\\|node_modules|@corsair'') -or ($text -match ''@corsair/icuewidget-cli|node-bin/icuewidget'')) { $found += $p } }; $found | Sort-Object -Unique | Select-Object -First 5"'
+  Pop $0
+  Pop $1
+  ${If} $1 != ""
+    DetailPrint "Detected an npm-installed icuewidget command:"
+    DetailPrint "$1"
+    MessageBox MB_ICONEXCLAMATION|MB_OK "Another npm-installed icuewidget command was detected:$\r$\n$\r$\n$1$\r$\n$\r$\nThe native installer will not remove it. If both remain installed, your PATH order decides which version runs. To avoid confusion, uninstall one copy, for example:$\r$\n$\r$\nnpm uninstall -g @corsair/icuewidget-cli"
+  ${EndIf}
+FunctionEnd
+
+Function un.RemoveFromPath
+  ReadRegStr $0 HKCU "Environment" "Path"
+  ${If} $0 != ""
+    Push "$0"
+    Push "$INSTDIR"
+    Call un.RemovePathSegment
+    Pop $0
+    WriteRegExpandStr HKCU "Environment" "Path" "$0"
+    SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
+  ${EndIf}
+FunctionEnd
+
+Function un.RemovePathSegment
+  Exch $1
+  Exch
+  Exch $0
+  Push $2
+  Push $3
+  StrCpy $2 ""
+  ${Do}
+    ${WordFind} "$0" ";" "+1" $3
+    ${If} $3 == ""
+      ${Break}
+    ${EndIf}
+    ${If} $3 != $1
+      ${If} $2 == ""
+        StrCpy $2 "$3"
+      ${Else}
+        StrCpy $2 "$2;$3"
+      ${EndIf}
+    ${EndIf}
+    ${WordFind} "$0" ";" "E+1" $0
+  ${Loop}
+  Pop $3
+  Exch $2
+  Exch
+  Pop $1
+FunctionEnd

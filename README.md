@@ -1,12 +1,12 @@
 # icuewidget CLI
 
-This repository contains the `icuewidget` command-line tool for creating, validating, and packaging iCUE widgets.
+This repository contains the `icuewidget` command-line tool for creating, validating, updating, and packaging iCUE widgets.
 
 The CLI uses:
 
-- `Typer` for command structure
-- `Rich` for polished help and output
-- `Questionary` for interactive scaffolding prompts
+- Node.js so it can run through `npx` without a native installer
+- built-in Node APIs for prompts, validation, and `.icuewidget` packaging
+- optional native installer builders for Windows `.exe` and macOS `.pkg`
 
 ## Commands
 
@@ -20,27 +20,43 @@ The CLI uses:
 ## Contents
 
 ```text
-icuewidget_cli/
-bin/
 .github/workflows/
-docs/
-pyproject.toml
-build_standalone.py
+installer/
+node-bin/
+scripts/
+src-node/
+test-node/
+package-lock.json
+package.json
 ```
 
-## Install from source
+## Run with npx
+
+After publishing to npm:
 
 ```bash
-pip install .
+npx @corsair/icuewidget-cli --help
+npx @corsair/icuewidget-cli init ./MyWidget
+npx @corsair/icuewidget-cli validate ./MyWidget
+npx @corsair/icuewidget-cli update ./MyWidget --min-app-version 5.45
+npx @corsair/icuewidget-cli package ./MyWidget
 ```
 
-## Run locally without installing
+## Run locally without publishing
 
 ```bash
-python3 -m icuewidget_cli --help
-python3 -m icuewidget_cli init ./MyWidget
-python3 -m icuewidget_cli validate ./MyWidget
-python3 -m icuewidget_cli package ./MyWidget
+npm install
+npm link
+icuewidget --help
+```
+
+Or run the local bin directly:
+
+```bash
+node node-bin/icuewidget.js --help
+node node-bin/icuewidget.js init ./MyWidget
+node node-bin/icuewidget.js validate ./MyWidget
+node node-bin/icuewidget.js package ./MyWidget
 ```
 
 ## Generated starter widget
@@ -65,6 +81,7 @@ The CLI always creates:
 - `translation.json`
 - `resources/icon.svg`
 - `styles/main.css`
+- `scripts/main.js`
 
 Examples:
 
@@ -73,28 +90,74 @@ icuewidget init ./HelloWidget
 ```
 
 
-## Standalone releases
+## Versioning
 
-This repo includes release packaging for standalone macOS and Windows binaries.
-
-For end-user-friendly global install artifacts, it also includes installer packaging:
-
-- macOS: signed-friendly `.pkg` installer target (installs `icuewidget` to `/usr/local/bin`)
-- Windows: branded CORSAIR installer `.exe` target (installs `icuewidget.exe` and adds it to user PATH)
-
-Windows packaging uses official CORSAIR branding assets for both:
-
-- `icuewidget.exe` icon
-- installer/uninstaller icon and installer header/wizard artwork
-
-Local maintainer workflow:
+The source package uses the base version `0.4.0`. Release automation can set the
+third digit at build time with one of these environment variables:
 
 ```bash
-python build_standalone.py
-python build_installers.py
+CLI_BUILD_PATCH=123 npm run build
+CLI_BUILD_VERSION=0.4.123 npm run build
 ```
 
-See:
+`CLI_BUILD_PATCH`, `BUILD_NUMBER`, or `GITHUB_RUN_NUMBER` produces
+`0.4.<patch>` for installer filenames and the bundled CLI `--version` output.
 
-- `docs/CLI_Release_Packaging.md`
-- `docs/CLI_Code_Signing_And_Notarization.md`
+For npm publishing, publish a full semantic version, for example:
+
+```bash
+npm version 0.4.123
+npm publish --access public
+```
+
+## npm publishing
+
+Before publishing, verify the package contents and tests:
+
+```bash
+npm test
+npm pack --dry-run
+```
+
+Then publish from this package directory:
+
+```bash
+npm publish --access public
+```
+
+Only the CLI runtime files listed in `package.json` are published to npm. The
+installer assets and build scripts stay in the repository and are excluded from
+the npm package.
+
+## Native installers
+
+The repository can also build native installers for users who do not want to use
+`npx` or `npm install -g`.
+
+Build standalone binaries first, then the platform installer:
+
+```bash
+npm run build
+```
+
+Outputs are written to:
+
+```text
+release/
+```
+
+Platform requirements:
+
+- Windows `.exe`: build on Windows with NSIS `makensis` on `PATH`
+- macOS `.pkg`: build on macOS with `pkgbuild` and `productbuild`
+
+By default, installer builds package the checked-out local CLI source. To build
+from a published npm package or tarball, set `CLI_PACKAGE_SPEC`:
+
+```bash
+CLI_PACKAGE_SPEC=@corsair/icuewidget-cli@latest npm run build
+CLI_PACKAGE_SPEC=./corsair-icuewidget-cli-1.0.0.tgz npm run build
+```
+
+The installers include best-effort cleanup for older Python-distributed versions
+of `icuewidget-cli` before installing the standalone Node CLI binary.
