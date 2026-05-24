@@ -61,7 +61,7 @@ async function stampCliRuntimeVersion(cliRoot, version) {
 function defaultTargets() {
   switch (process.platform) {
     case "darwin":
-      return "node20-macos-arm64,node20-macos-x64";
+      return process.arch === "arm64" ? "node20-macos-arm64" : "node20-macos-x64";
     case "win32":
       return "node20-win-x64";
     default:

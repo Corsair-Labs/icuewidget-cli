@@ -31,7 +31,15 @@ pipeline {
       steps {
         script {
           if (isUnix()) {
-            sh 'PKG_TARGETS="node20-macos-arm64,node20-macos-x64" npm run build'
+            sh '''
+              ARCH="$(uname -m)"
+              if [ "$ARCH" = "arm64" ]; then
+                export PKG_TARGETS="node20-macos-arm64"
+              else
+                export PKG_TARGETS="node20-macos-x64"
+              fi
+              npm run build
+            '''
           } else {
             bat 'set PKG_TARGETS=node20-win-x64&& npm run build'
           }

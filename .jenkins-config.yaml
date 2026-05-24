@@ -14,6 +14,9 @@ commands:
   check: 'npm run check'
   package: 'npm pack --dry-run'
   build: 'npm run build'
+  build_macos_arm64: 'PKG_TARGETS=node20-macos-arm64 npm run build'
+  build_macos_x64: 'PKG_TARGETS=node20-macos-x64 npm run build'
+  build_windows_x64: 'set PKG_TARGETS=node20-win-x64&& npm run build'
 
 environment:
   CLI_BUILD_PATCH: '${BUILD_NUMBER}'
