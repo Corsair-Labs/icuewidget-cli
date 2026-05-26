@@ -19,8 +19,8 @@ run("npm", ["pack", packageSpec, "--pack-destination", packageDir], root);
 const [tarball] = (await fs.readdir(packageDir)).filter((file) => file.endsWith(".tgz"));
 if (!tarball) throw new Error(`npm pack did not create a tarball for ${packageSpec}`);
 
-run("tar", ["-xzf", path.join(packageDir, tarball), "-C", packageDir], root);
-const cliRoot = path.join(packageDir, "package");
+run("npm", ["install", path.join(packageDir, tarball), "--prefix", packageDir, "--ignore-scripts", "--no-audit", "--no-fund"], root);
+const cliRoot = await findInstalledCliRoot(packageDir);
 const cliPackageJson = JSON.parse(await fs.readFile(path.join(cliRoot, "package.json"), "utf8"));
 const cliVersion = resolveBuildVersion(cliPackageJson.version);
 const entry = path.join(cliRoot, "node-bin", "icuewidget.js");
@@ -58,6 +58,27 @@ async function stampCliRuntimeVersion(cliRoot, version) {
   );
 }
 
+async function findInstalledCliRoot(packageDir) {
+  const nodeModules = path.join(packageDir, "node_modules");
+  const candidates = [
+    path.join(nodeModules, "@corsair", "icuewidget-cli"),
+    path.join(nodeModules, "icuewidget-cli"),
+  ];
+  for (const candidate of candidates) {
+    if (await exists(path.join(candidate, "package.json"))) return candidate;
+  }
+  throw new Error(`Could not find installed CLI package in ${nodeModules}`);
+}
+
+async function exists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function defaultTargets() {
   switch (process.platform) {
     case "darwin":
@@ -77,6 +98,10 @@ function outputName(target) {
 }
 
 function run(command, args, cwd) {
-  const result = spawnSync(command, args, { cwd, stdio: "inherit", shell: process.platform === "win32" });
+  const result = spawnSync(executable(command), args, { cwd, stdio: "inherit" });
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} failed`);
+}
+
+function executable(command) {
+  return process.platform === "win32" && ["npm", "npx"].includes(command) ? `${command}.cmd` : command;
 }
