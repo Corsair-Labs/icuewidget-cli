@@ -2,6 +2,10 @@ Unicode true
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
 !include "LogicLib.nsh"
+!include "StrFunc.nsh"
+${StrStr}
+!include "WordFunc.nsh"
+!insertmacro WordFind
 
 !ifndef PRODUCT_VERSION
   !define PRODUCT_VERSION "1.0.0"
@@ -77,7 +81,7 @@ ShowUnInstDetails show
 Section "Install" SEC01
   SetOutPath "$INSTDIR"
   Call CleanupLegacyPythonCli
-  Call WarnDuplicateNpmCli
+  Call CleanupNpmCli
   File /oname=icuewidget.exe "${CLI_BINARY}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
@@ -116,20 +120,14 @@ FunctionEnd
 Function CleanupLegacyPythonCli
   ; Best-effort cleanup for Python/pipx/uv-installed versions. All commands are
   ; allowed to fail so installer success never depends on Python being present.
-  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = ''SilentlyContinue''; if (Get-Command pipx -ErrorAction SilentlyContinue) { pipx uninstall icuewidget-cli | Out-Null }; if (Get-Command uv -ErrorAction SilentlyContinue) { uv tool uninstall icuewidget-cli | Out-Null }; $paths = @(where.exe icuewidget 2>$null); foreach ($p in $paths) { if (-not $p) { continue }; if ($p -like "$env:LOCALAPPDATA\Programs\icuewidget-cli\*") { continue }; $text = Get-Content -LiteralPath $p -Raw -ErrorAction SilentlyContinue; if (($p -match ''Python|pipx|Scripts\\icuewidget'') -or ($text -match ''python|icuewidget_cli'')) { Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue } }"'
+  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$$ErrorActionPreference = ''SilentlyContinue''; if (Get-Command pipx -ErrorAction SilentlyContinue) { pipx uninstall icuewidget-cli | Out-Null }; if (Get-Command uv -ErrorAction SilentlyContinue) { uv tool uninstall icuewidget-cli | Out-Null }; $$paths = @(where.exe icuewidget 2>$$null); foreach ($$p in $$paths) { if (-not $$p) { continue }; if ($$p -like ''$LOCALAPPDATA\Programs\icuewidget-cli\*'') { continue }; $$text = Get-Content -LiteralPath $$p -Raw -ErrorAction SilentlyContinue; if (($$p -match ''Python|pipx|Scripts\\icuewidget'') -or ($$text -match ''python|icuewidget_cli'')) { Remove-Item -LiteralPath $$p -Force -ErrorAction SilentlyContinue } }"'
 FunctionEnd
 
-Function WarnDuplicateNpmCli
-  ; Detect npm-installed copies without removing them. The standalone installer
-  ; can coexist with npm, but PATH order decides which `icuewidget` runs.
-  nsExec::ExecToStack 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = ''SilentlyContinue''; $found = @(); if (Get-Command npm -ErrorAction SilentlyContinue) { $prefix = npm prefix -g 2>$null; if ($prefix) { foreach ($name in @(''icuewidget.cmd'', ''icuewidget.ps1'', ''icuewidget'')) { $candidate = Join-Path $prefix $name; if (Test-Path -LiteralPath $candidate) { $found += $candidate } } } }; foreach ($p in @(where.exe icuewidget 2>$null)) { if (-not $p) { continue }; if ($p -like "$env:LOCALAPPDATA\\Programs\\icuewidget-cli\\*") { continue }; $text = Get-Content -LiteralPath $p -Raw -ErrorAction SilentlyContinue; if (($p -match ''\\npm\\|node_modules|@corsair'') -or ($text -match ''@corsair/icuewidget-cli|node-bin/icuewidget'')) { $found += $p } }; $found | Sort-Object -Unique | Select-Object -First 5"'
-  Pop $0
-  Pop $1
-  ${If} $1 != ""
-    DetailPrint "Detected an npm-installed icuewidget command:"
-    DetailPrint "$1"
-    MessageBox MB_ICONEXCLAMATION|MB_OK "Another npm-installed icuewidget command was detected:$\r$\n$\r$\n$1$\r$\n$\r$\nThe native installer will not remove it. If both remain installed, your PATH order decides which version runs. To avoid confusion, uninstall one copy, for example:$\r$\n$\r$\nnpm uninstall -g @corsair/icuewidget-cli"
-  ${EndIf}
+Function CleanupNpmCli
+  ; Best-effort removal of any npm-globally-installed icuewidget-cli. The native
+  ; binary supersedes the npm package; all commands are allowed to fail so the
+  ; installer never depends on npm being present.
+  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$$ErrorActionPreference = ''SilentlyContinue''; if (Get-Command npm -ErrorAction SilentlyContinue) { npm uninstall -g @corsair/icuewidget-cli 2>$$null | Out-Null }; $$paths = @(where.exe icuewidget 2>$$null); foreach ($$p in $$paths) { if (-not $$p) { continue }; if ($$p -like ''$LOCALAPPDATA\Programs\icuewidget-cli\*'') { continue }; $$text = Get-Content -LiteralPath $$p -Raw -ErrorAction SilentlyContinue; if (($$p -match ''\\npm\\|node_modules|@corsair'') -or ($$text -match ''@corsair/icuewidget-cli|node-bin/icuewidget'')) { Remove-Item -LiteralPath $$p -Force -ErrorAction SilentlyContinue } }"'
 FunctionEnd
 
 Function un.RemoveFromPath

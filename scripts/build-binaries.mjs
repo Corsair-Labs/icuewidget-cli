@@ -98,10 +98,6 @@ function outputName(target) {
 }
 
 function run(command, args, cwd) {
-  const result = spawnSync(executable(command), args, { cwd, stdio: "inherit" });
+  const result = spawnSync(command, args, { cwd, stdio: "inherit", shell: process.platform === "win32" });
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} failed`);
-}
-
-function executable(command) {
-  return process.platform === "win32" && ["npm", "npx"].includes(command) ? `${command}.cmd` : command;
 }
