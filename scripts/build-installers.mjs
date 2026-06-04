@@ -1,11 +1,30 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { deflateSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
+
+const crc32Table = Array.from({ length: 256 }, (_, index) => {
+  let crc = index;
+  for (let bit = 0; bit < 8; bit += 1) {
+    crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
+  }
+  return crc >>> 0;
+});
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const distBinDir = path.join(root, "dist", "bin");
 const releaseDir = path.join(root, "release");
+const buildDir = path.join(root, "build");
+const macosResourceSourceDir = path.join(root, "installer", "macos", "resources");
+const macosResourceBuildDir = path.join(buildDir, "macos-resources");
+const windowsAssetDir = path.join(root, "installer", "windows", "assets");
+const corsairLogoSource = path.join(windowsAssetDir, "CorsairLogo.bmp");
+const corsairIconSource = path.join(windowsAssetDir, "corsair-cli.ico");
+const macosIconPng = path.join(buildDir, "corsair-cli-icon.png");
+const macosIconset = path.join(buildDir, "corsair-cli.iconset");
+const macosIconIcns = path.join(buildDir, "corsair-cli.icns");
+const macosSidebarLogoLeftPadding = 12;
 const version = (await fs.readFile(path.join(distBinDir, "version.txt"), "utf8")).trim();
 
 await fs.mkdir(releaseDir, { recursive: true });
@@ -54,6 +73,9 @@ async function buildMacInstaller(version) {
   await fs.chmod(path.join(installBin, "icuewidget"), 0o755);
   const componentPkg = path.join(root, "build", `icuewidget-${version}-component.pkg`);
   const distribution = path.join(root, "build", "Distribution.xml");
+  const productPkg = path.join(releaseDir, `icuewidget-${version}-macos.pkg`);
+  const staleProductDmg = path.join(releaseDir, `icuewidget-${version}-macos.dmg`);
+  await stageMacInstallerResources();
 
   run("pkgbuild", [
     "--root", stagedRoot,
@@ -65,62 +87,158 @@ async function buildMacInstaller(version) {
   ], root);
 
   await fs.writeFile(distribution, distributionXml(version), "utf8");
-  const productPkg = path.join(releaseDir, `icuewidget-${version}-macos.pkg`);
   run("productbuild", [
     "--distribution", distribution,
-    "--resources", path.join(root, "installer", "macos", "resources"),
+    "--resources", macosResourceBuildDir,
     "--package-path", path.join(root, "build"),
     productPkg,
   ], root);
-  await applyPkgFinderIcon(productPkg);
+  await applyFinderIcon(productPkg, macosIconIcns);
+  await fs.rm(staleProductDmg, { force: true });
 }
 
-async function mustExist(filePath, message) {
-  if (!(await exists(filePath))) throw new Error(`${filePath} not found. ${message}`);
+async function stageMacInstallerResources() {
+  await fs.rm(macosResourceBuildDir, { recursive: true, force: true });
+  await fs.mkdir(macosResourceBuildDir, { recursive: true });
+  await mustExist(corsairLogoSource, "The shared CORSAIR logo asset is required for macOS installer branding.");
+  await mustExist(corsairIconSource, "The shared CORSAIR icon asset is required for macOS installer branding.");
+
+  await writeCorsairLogoPngs(
+    corsairLogoSource,
+    path.join(macosResourceBuildDir, "corsair-logo-light.png"),
+    path.join(macosResourceBuildDir, "corsair-logo-dark.png"),
+  );
+  await fs.copyFile(
+    path.join(macosResourceSourceDir, "welcome.html"),
+    path.join(macosResourceBuildDir, "welcome.html"),
+  );
+  await buildIcnsFromIco(corsairIconSource, macosIconPng, macosIconset, macosIconIcns);
+  await fs.copyFile(macosIconIcns, path.join(macosResourceBuildDir, "corsair-cli.icns"));
 }
 
-async function exists(filePath) {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
+async function writeCorsairLogoPngs(sourceBmp, lightOutputPng, darkOutputPng) {
+  const bmp = await read24BitBmp(sourceBmp);
+  await fs.writeFile(lightOutputPng, encodeCorsairLogoPng(bmp, [0, 0, 0]));
+  await fs.writeFile(darkOutputPng, encodeCorsairLogoPng(bmp, [255, 255, 255]));
+}
+
+async function read24BitBmp(sourceBmp) {
+  const data = await fs.readFile(sourceBmp);
+  if (data.toString("ascii", 0, 2) !== "BM") throw new Error(`${sourceBmp} is not a BMP file`);
+
+  const pixelOffset = data.readUInt32LE(10);
+  const dibSize = data.readUInt32LE(14);
+  const width = data.readInt32LE(18);
+  const rawHeight = data.readInt32LE(22);
+  const planes = data.readUInt16LE(26);
+  const bitsPerPixel = data.readUInt16LE(28);
+  const compression = data.readUInt32LE(30);
+  if (dibSize < 40 || planes !== 1 || bitsPerPixel !== 24 || compression !== 0) {
+    throw new Error(`${sourceBmp} must be an uncompressed 24-bit BMP`);
   }
+
+  const height = Math.abs(rawHeight);
+  const bottomUp = rawHeight > 0;
+  const rowStride = Math.ceil((width * 3) / 4) * 4;
+  const pixels = Buffer.alloc(width * height * 4);
+
+  for (let y = 0; y < height; y += 1) {
+    const sourceY = bottomUp ? height - 1 - y : y;
+    const sourceRow = pixelOffset + sourceY * rowStride;
+    for (let x = 0; x < width; x += 1) {
+      const source = sourceRow + x * 3;
+      const target = (y * width + x) * 4;
+      pixels[target] = data[source + 2];
+      pixels[target + 1] = data[source + 1];
+      pixels[target + 2] = data[source];
+      pixels[target + 3] = 255;
+    }
+  }
+
+  return { width, height, pixels };
 }
 
-function run(command, args, cwd) {
-  const result = spawnSync(command, args, { cwd, stdio: "inherit", shell: process.platform === "win32" });
-  if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} failed`);
+function encodeCorsairLogoPng({ width, height, pixels }, color) {
+  const canvasWidth = width + macosSidebarLogoLeftPadding;
+  const raw = Buffer.alloc((canvasWidth * 4 + 1) * height);
+  for (let y = 0; y < height; y += 1) {
+    const rawRow = y * (canvasWidth * 4 + 1);
+    raw[rawRow] = 0;
+    for (let x = 0; x < width; x += 1) {
+      const source = (y * width + x) * 4;
+      const target = rawRow + 1 + (x + macosSidebarLogoLeftPadding) * 4;
+      const luminance = 0.2126 * pixels[source] + 0.7152 * pixels[source + 1] + 0.0722 * pixels[source + 2];
+      const alpha = logoAlphaFromLuminance(luminance);
+      raw[target] = color[0];
+      raw[target + 1] = color[1];
+      raw[target + 2] = color[2];
+      raw[target + 3] = alpha;
+    }
+  }
+
+  return encodePng(canvasWidth, height, raw);
 }
 
-function runQuiet(command, args, cwd) {
-  const result = spawnSync(command, args, { cwd, stdio: "ignore", shell: process.platform === "win32" });
-  if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} failed`);
+function logoAlphaFromLuminance(luminance) {
+  const ink = 1 - Math.max(0, Math.min(255, luminance)) / 255;
+  if (ink < 0.015) return 0;
+  return Math.max(0, Math.min(255, Math.round(255 * Math.pow(ink, 0.88))));
 }
 
-async function applyPkgFinderIcon(pkgPath) {
-  const iconPng = path.join(root, "installer", "macos", "resources", "icuewidget-icon.png");
-  const iconset = path.join(root, "build", "icuewidget.iconset");
-  const iconIcns = path.join(root, "installer", "macos", "resources", "icuewidget-icon.icns");
-  const resourceFile = path.join(root, "build", "pkg-icon.r");
-  if (process.platform !== "darwin" || !(await exists(iconPng))) return;
+function encodePng(width, height, rawRgbaScanlines) {
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+  return Buffer.concat([
+    signature,
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", deflateSync(rawRgbaScanlines)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+function pngChunk(type, data) {
+  const typeBuffer = Buffer.from(type, "ascii");
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length, 0);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([typeBuffer, data])), 0);
+  return Buffer.concat([length, typeBuffer, data, crc]);
+}
+
+function crc32(data) {
+  let crc = 0xffffffff;
+  for (const byte of data) {
+    crc = (crc >>> 8) ^ crc32Table[(crc ^ byte) & 0xff];
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+async function applyFinderIcon(filePath, iconIcns) {
+  const resourceFile = path.join(root, "build", `${path.basename(filePath)}-icon.rsrc`);
+  if (process.platform !== "darwin" || !(await exists(iconIcns))) return;
   if (!["sips", "iconutil", "DeRez", "Rez", "SetFile"].every(commandExists)) {
-    console.warn("Skipping custom .pkg Finder icon because Xcode resource tools are not available.");
+    console.warn(`Skipping custom Finder icon for ${path.basename(filePath)} because Xcode resource tools are not available.`);
     return;
   }
 
-  await buildIcns(iconPng, iconset, iconIcns);
-  await fs.writeFile(
-    resourceFile,
-    `read 'icns' (-16455, "CustomIcon") "${escapeRezPath(path.relative(root, iconIcns))}";\n`,
-    "utf8",
-  );
-  run("Rez", ["-append", resourceFile, "-o", pkgPath], root);
-  run("SetFile", ["-a", "C", pkgPath], root);
+  runQuiet("sips", ["-i", iconIcns], root);
+  const result = spawnSync("DeRez", ["-only", "icns", iconIcns], { cwd: root, encoding: "utf8" });
+  if (result.status !== 0) throw new Error(`DeRez -only icns ${iconIcns} failed`);
+  await fs.writeFile(resourceFile, result.stdout, "utf8");
+  run("Rez", ["-append", resourceFile, "-o", filePath], root);
+  run("SetFile", ["-a", "C", filePath], root);
 }
 
-function escapeRezPath(filePath) {
-  return filePath.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+async function buildIcnsFromIco(sourceIco, sourcePng, iconset, outputIcns) {
+  runQuiet("sips", ["-s", "format", "png", sourceIco, "--out", sourcePng], root);
+  await buildIcns(sourcePng, iconset, outputIcns);
 }
 
 async function buildIcns(sourcePng, iconset, outputIcns) {
@@ -149,14 +267,39 @@ function commandExists(command) {
   return result.status === 0;
 }
 
+async function mustExist(filePath, message) {
+  if (!(await exists(filePath))) throw new Error(`${filePath} not found. ${message}`);
+}
+
+async function exists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function run(command, args, cwd) {
+  const result = spawnSync(command, args, { cwd, stdio: "inherit", shell: process.platform === "win32" });
+  if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} failed`);
+}
+
+function runQuiet(command, args, cwd) {
+  const result = spawnSync(command, args, { cwd, stdio: "ignore", shell: process.platform === "win32" });
+  if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} failed`);
+}
+
 function distributionXml(version) {
   return `<?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="1">
   <title>iCUE Widget CLI</title>
-  <welcome file="welcome.html"/>
-  <readme file="readme.html"/>
+  <welcome file="welcome.html" mime-type="text/html"/>
+  <icon file="corsair-cli.icns"/>
   <options customize="never" require-scripts="true"/>
   <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+  <background file="corsair-logo-light.png" mime-type="image/png" scaling="none" alignment="topleft"/>
+  <background-darkAqua file="corsair-logo-dark.png" mime-type="image/png" scaling="none" alignment="topleft"/>
   <pkg-ref id="com.corsair.icuewidget-cli" version="${escapeXml(version)}">icuewidget-${escapeXml(version)}-component.pkg</pkg-ref>
   <choices-outline>
     <line choice="default"/>

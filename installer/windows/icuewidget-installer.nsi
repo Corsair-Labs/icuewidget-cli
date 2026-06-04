@@ -26,7 +26,7 @@ ${StrStr}
 !define INSTALL_REG_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define BRAND_ICON "${BRAND_ASSET_DIR}\corsair-cli.ico"
 !define BRAND_WIZARD_BITMAP "${BRAND_ASSET_DIR}\InstallerSideImage.bmp"
-!define BRAND_HEADER_BITMAP "${BRAND_ASSET_DIR}\CORSAIRLogo2020_horiz_K.bmp"
+!define BRAND_HEADER_BITMAP "${BRAND_ASSET_DIR}\CorsairLogo.bmp"
 !define NSIS_GRAPHICS_DIR "${NSISDIR}\Contrib\Graphics"
 
 Name "${PRODUCT_NAME}"
