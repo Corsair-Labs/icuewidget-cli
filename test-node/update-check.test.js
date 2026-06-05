@@ -15,7 +15,7 @@ test("semver comparison detects newer versions", () => {
   assert.equal(isNewerVersion("not-a-version", "0.4.0"), false);
 });
 
-test("notifyAboutUpdate prints cached update and starts stale worker", async () => {
+test("notifyAboutUpdate prints cached update and triggers fresh check", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "icuewidget-update-"));
   const cacheDir = path.join(root, "cache");
   await fs.mkdir(path.join(cacheDir, "icuewidget-cli"), { recursive: true });
@@ -25,23 +25,15 @@ test("notifyAboutUpdate prints cached update and starts stale worker", async () 
   }), "utf8");
 
   let output = "";
-  const spawns = [];
   await notifyAboutUpdate({
     argv: [process.execPath, "/tmp/icuewidget.js", "validate"],
     env: { ...process.env, ICUEWIDGET_UPDATE_CACHE_DIR: cacheDir },
     now: 24 * 60 * 60 * 1000,
     stderr: { write(value) { output += value; } },
-    spawnImpl(command, args, options) {
-      spawns.push({ command, args, options });
-      return { unref() {} };
-    },
   });
 
   assert.match(output, /Update available: icuewidget 0\.4\.0 → 0\.4\.3/);
-  assert.match(output, /npm install -g @corsair\/icuewidget-cli@latest/);
-  assert.equal(spawns.length, 1);
-  assert.deepEqual(spawns[0].args, ["/tmp/icuewidget.js", "--update-check-worker"]);
-  assert.equal(spawns[0].options.env.ICUEWIDGET_UPDATE_CHECK_WORKER, "1");
+  assert.match(output, /npm install -g @icue\/icuewidget-cli@latest/);
 });
 
 test("notifyAboutUpdate respects opt-out", async () => {

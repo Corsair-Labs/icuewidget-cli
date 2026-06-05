@@ -1,5 +1,5 @@
 {
-  "name": "@corsair/icuewidget-cli",
+  "name": "@icue/icuewidget-cli",
   "version": "0.4.0",
   "description": "Create, validate, update, and package CORSAIR iCUE widgets.",
   "type": "module",

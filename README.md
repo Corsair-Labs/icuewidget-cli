@@ -35,11 +35,11 @@ package.json
 After publishing to npm:
 
 ```bash
-npx @corsair/icuewidget-cli --help
-npx @corsair/icuewidget-cli init ./MyWidget
-npx @corsair/icuewidget-cli validate ./MyWidget
-npx @corsair/icuewidget-cli update ./MyWidget --min-app-version 5.45
-npx @corsair/icuewidget-cli package ./MyWidget
+npx @icue/icuewidget-cli --help
+npx @icue/icuewidget-cli init ./MyWidget
+npx @icue/icuewidget-cli validate ./MyWidget
+npx @icue/icuewidget-cli update ./MyWidget --min-app-version 5.45
+npx @icue/icuewidget-cli package ./MyWidget
 ```
 
 ## Run locally without publishing
@@ -155,7 +155,7 @@ By default, installer builds package the checked-out local CLI source. To build
 from a published npm package or tarball, set `CLI_PACKAGE_SPEC`:
 
 ```bash
-CLI_PACKAGE_SPEC=@corsair/icuewidget-cli@latest npm run build
+CLI_PACKAGE_SPEC=@icue/icuewidget-cli@latest npm run build
 CLI_PACKAGE_SPEC=./corsair-icuewidget-cli-1.0.0.tgz npm run build
 ```
 

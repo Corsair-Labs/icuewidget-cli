@@ -26,12 +26,12 @@ $CANDIDATE"
       if [ -L "$CANDIDATE" ]; then
         LINK_TARGET="$(readlink "$CANDIDATE" 2>/dev/null || true)"
         case "$LINK_TARGET" in
-          *npm*|*node_modules*|*@corsair/icuewidget-cli*|*node-bin/icuewidget*)
+          *npm*|*node_modules*|*@icue/icuewidget-cli*|*node-bin/icuewidget*)
             FOUND="$FOUND
 $CANDIDATE -> $LINK_TARGET"
             ;;
         esac
-      elif [ -f "$CANDIDATE" ] && head -n 10 "$CANDIDATE" 2>/dev/null | grep -Eq '@corsair/icuewidget-cli|node-bin/icuewidget|node_modules'; then
+      elif [ -f "$CANDIDATE" ] && head -n 10 "$CANDIDATE" 2>/dev/null | grep -Eq '@icue/icuewidget-cli|node-bin/icuewidget|node_modules'; then
         FOUND="$FOUND
 $CANDIDATE"
       fi
@@ -46,7 +46,7 @@ The native installer will not remove it. If both remain installed, your PATH
 order decides which version runs. To avoid confusion, uninstall one copy, for
 example:
 
-  npm uninstall -g @corsair/icuewidget-cli
+  npm uninstall -g @icue/icuewidget-cli
 
 EOF
   fi

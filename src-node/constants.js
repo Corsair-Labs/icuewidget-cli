@@ -1,5 +1,5 @@
 export const APP_NAME = "icuewidget";
-export const NPM_PACKAGE_NAME = "@corsair/icuewidget-cli";
+export const NPM_PACKAGE_NAME = "@icue/icuewidget-cli";
 export const CLI_VERSION = "0.4.0";
 export const DEFAULT_APP_VERSION = "5.45";
 export const DEFAULT_FRAMEWORK_VERSION = "1.0.0";

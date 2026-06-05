@@ -61,7 +61,7 @@ async function stampCliRuntimeVersion(cliRoot, version) {
 async function findInstalledCliRoot(packageDir) {
   const nodeModules = path.join(packageDir, "node_modules");
   const candidates = [
-    path.join(nodeModules, "@corsair", "icuewidget-cli"),
+    path.join(nodeModules, "@icue", "icuewidget-cli"),
     path.join(nodeModules, "icuewidget-cli"),
   ];
   for (const candidate of candidates) {

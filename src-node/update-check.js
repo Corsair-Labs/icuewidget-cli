@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -13,7 +12,6 @@ export async function notifyAboutUpdate({
   env = process.env,
   now = Date.now(),
   stderr = process.stderr,
-  spawnImpl = spawn,
 } = {}) {
   if (env.ICUEWIDGET_NO_UPDATE_CHECK === "1" || env.ICUEWIDGET_UPDATE_CHECK_WORKER === "1" || argv.includes("--update-check-worker")) return;
 
@@ -30,7 +28,7 @@ export async function notifyAboutUpdate({
 
   const checkedAt = Number(cache?.checkedAt ?? 0);
   if (!Number.isFinite(checkedAt) || now - checkedAt >= DAY_MS) {
-    startUpdateCheckWorker(argv, env, spawnImpl);
+    runUpdateCheckWorker({ env }).catch(() => {});
   }
 }
 
@@ -69,22 +67,6 @@ async function fetchLatestVersion(fetchImpl) {
     return typeof body.version === "string" ? body.version : undefined;
   } finally {
     clearTimeout(timeout);
-  }
-}
-
-function startUpdateCheckWorker(argv, env, spawnImpl) {
-  const isPackagedBinary = Boolean(process.pkg);
-  const runner = isPackagedBinary ? undefined : argv[1];
-  if (!isPackagedBinary && !runner) return;
-  try {
-    const child = spawnImpl(process.execPath, isPackagedBinary ? ["--update-check-worker"] : [runner, "--update-check-worker"], {
-      detached: true,
-      stdio: "ignore",
-      env: { ...env, ICUEWIDGET_UPDATE_CHECK_WORKER: "1" },
-    });
-    child.unref?.();
-  } catch {
-    // Ignore worker launch failures.
   }
 }
 
