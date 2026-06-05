@@ -221,19 +221,27 @@ function crc32(data) {
 }
 
 async function applyFinderIcon(filePath, iconIcns) {
-  const resourceFile = path.join(root, "build", `${path.basename(filePath)}-icon.rsrc`);
   if (process.platform !== "darwin" || !(await exists(iconIcns))) return;
-  if (!["sips", "iconutil", "DeRez", "Rez", "SetFile"].every(commandExists)) {
-    console.warn(`Skipping custom Finder icon for ${path.basename(filePath)} because Xcode resource tools are not available.`);
+
+  // Preferred: fileicon (installable via Homebrew, works on modern macOS)
+  if (commandExists("fileicon")) {
+    run("fileicon", ["set", filePath, iconIcns], root);
     return;
   }
 
-  runQuiet("sips", ["-i", iconIcns], root);
-  const result = spawnSync("DeRez", ["-only", "icns", iconIcns], { cwd: root, encoding: "utf8" });
-  if (result.status !== 0) throw new Error(`DeRez -only icns ${iconIcns} failed`);
-  await fs.writeFile(resourceFile, result.stdout, "utf8");
-  run("Rez", ["-append", resourceFile, "-o", filePath], root);
-  run("SetFile", ["-a", "C", filePath], root);
+  // Fallback: Carbon-era Rez/DeRez/SetFile (Xcode CLT, removed in macOS 14+)
+  if (["sips", "iconutil", "DeRez", "Rez", "SetFile"].every(commandExists)) {
+    const resourceFile = path.join(root, "build", `${path.basename(filePath)}-icon.rsrc`);
+    runQuiet("sips", ["-i", iconIcns], root);
+    const result = spawnSync("DeRez", ["-only", "icns", iconIcns], { cwd: root, encoding: "utf8" });
+    if (result.status !== 0) throw new Error(`DeRez -only icns ${iconIcns} failed`);
+    await fs.writeFile(resourceFile, result.stdout, "utf8");
+    run("Rez", ["-append", resourceFile, "-o", filePath], root);
+    run("SetFile", ["-a", "C", filePath], root);
+    return;
+  }
+
+  console.warn(`Skipping custom Finder icon for ${path.basename(filePath)} - no compatible icon tool available. Install fileicon: brew install fileicon`);
 }
 
 async function buildIcnsFromIco(sourceIco, sourcePng, iconset, outputIcns) {

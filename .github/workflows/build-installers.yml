@@ -43,6 +43,8 @@ jobs:
           cache: npm
       - name: Install Node dependencies
         run: npm ci
+      - name: Install icon tool
+        run: brew install fileicon
       - name: Build macOS installer
         run: |
           export CLI_PACKAGE_SPEC="${{ inputs.cli_package_spec }}"

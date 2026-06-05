@@ -1,9 +1,7 @@
 Unicode true
 !include "MUI2.nsh"
-!include "FileFunc.nsh"
-!include "LogicLib.nsh"
 !include "WordFunc.nsh"
-!insertmacro WordFind
+!include "LogicLib.nsh"
 
 !ifndef PRODUCT_VERSION
   !define PRODUCT_VERSION "1.0.0"
@@ -77,12 +75,7 @@ ShowUnInstDetails show
 !insertmacro MUI_LANGUAGE "English"
 
 Section "Install" SEC01
-  SetOutPath "$TEMP"
-  File "resources\AddToPath.ps1"
-  File "resources\CleanupLegacyPythonCli.ps1"
-  File "resources\CleanupNpmCli.ps1"
-  Call CleanupNpmCli
-  Call CleanupLegacyPythonCli
+  Call CleanupNpmGlobal
   SetOutPath "$INSTDIR"
   File /oname=icuewidget.exe "${CLI_BINARY}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
@@ -96,9 +89,6 @@ Section "Install" SEC01
   WriteRegDWORD HKCU "${INSTALL_REG_KEY}" "NoRepair" 1
 
   Call AddToPath
-  Delete "$TEMP\AddToPath.ps1"
-  Delete "$TEMP\CleanupLegacyPythonCli.ps1"
-  Delete "$TEMP\CleanupNpmCli.ps1"
 SectionEnd
 
 Section "Uninstall"
@@ -109,19 +99,73 @@ Section "Uninstall"
   DeleteRegKey HKCU "${INSTALL_REG_KEY}"
 SectionEnd
 
+; ---------------------------------------------------------------------------
+; AddToPath: Prepends $INSTDIR to the user's PATH.  Pure NSIS — no external
+; process launched, so Norton/Security software sees nothing to flag.
+; ---------------------------------------------------------------------------
 Function AddToPath
-  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$TEMP\AddToPath.ps1" -InstallDir "$INSTDIR"'
+  ReadRegStr $0 HKCU "Environment" "Path"
+  Push "$0"
+  Push "$INSTDIR"
+  Call RemovePathSegment
+  Pop $0
+
+  ${If} $0 == ""
+    StrCpy $0 "$INSTDIR"
+  ${Else}
+    StrCpy $0 "$INSTDIR;$0"
+  ${EndIf}
+
+  WriteRegExpandStr HKCU "Environment" "Path" "$0"
   SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
 FunctionEnd
 
-Function CleanupLegacyPythonCli
-  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$TEMP\CleanupLegacyPythonCli.ps1"'
+; ---------------------------------------------------------------------------
+; RemovePathSegment: given a semicolon-separated list and a segment,
+; returns the list with that segment removed.
+; Stack: top=segment, bottom=list  →  top=list
+; ---------------------------------------------------------------------------
+Function RemovePathSegment
+  Exch $1
+  Exch
+  Exch $0
+  Push $2
+  Push $3
+  StrCpy $2 ""
+  ${Do}
+    ${WordFind} "$0" ";" "+1" $3
+    ${If} $3 == ""
+      ${Break}
+    ${EndIf}
+    ${If} $3 != $1
+      ${If} $2 == ""
+        StrCpy $2 "$3"
+      ${Else}
+        StrCpy $2 "$2;$3"
+      ${EndIf}
+    ${EndIf}
+    ${WordFind} "$0" ";" "E+1" $0
+  ${Loop}
+  Pop $3
+  Exch $2
+  Exch
+  Pop $1
 FunctionEnd
 
-Function CleanupNpmCli
-  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$TEMP\CleanupNpmCli.ps1"'
+; ---------------------------------------------------------------------------
+; CleanupNpmGlobal: Uninstall any npm/pipx/uv global package.  Uses cmd.exe
+; which is a fraction of the size of PowerShell and triggers much fewer
+; security alerts.  All commands are best-effort (2>nul silence).
+; ---------------------------------------------------------------------------
+Function CleanupNpmGlobal
+  nsExec::ExecToLog 'cmd.exe /c npm uninstall -g @icue/icuewidget-cli 2>nul'
+  nsExec::ExecToLog 'cmd.exe /c pipx uninstall icuewidget-cli 2>nul'
+  nsExec::ExecToLog 'cmd.exe /c uv tool uninstall icuewidget-cli 2>nul'
 FunctionEnd
 
+; ---------------------------------------------------------------------------
+; Uninstaller helper
+; ---------------------------------------------------------------------------
 Function un.RemoveFromPath
   ReadRegStr $0 HKCU "Environment" "Path"
   ${If} $0 != ""
