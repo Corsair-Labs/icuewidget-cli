@@ -77,9 +77,13 @@ ShowUnInstDetails show
 !insertmacro MUI_LANGUAGE "English"
 
 Section "Install" SEC01
-  SetOutPath "$INSTDIR"
-  Call CleanupLegacyPythonCli
+  SetOutPath "$TEMP"
+  File "resources\AddToPath.ps1"
+  File "resources\CleanupLegacyPythonCli.ps1"
+  File "resources\CleanupNpmCli.ps1"
   Call CleanupNpmCli
+  Call CleanupLegacyPythonCli
+  SetOutPath "$INSTDIR"
   File /oname=icuewidget.exe "${CLI_BINARY}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
@@ -92,6 +96,9 @@ Section "Install" SEC01
   WriteRegDWORD HKCU "${INSTALL_REG_KEY}" "NoRepair" 1
 
   Call AddToPath
+  Delete "$TEMP\AddToPath.ps1"
+  Delete "$TEMP\CleanupLegacyPythonCli.ps1"
+  Delete "$TEMP\CleanupNpmCli.ps1"
 SectionEnd
 
 Section "Uninstall"
@@ -103,24 +110,16 @@ Section "Uninstall"
 SectionEnd
 
 Function AddToPath
-  ; Put the native installer directory first in the user's PATH. Appending can
-  ; leave older Python/npm shims earlier in PATH, so `icuewidget` still resolves
-  ; to the old version after a successful install.
-  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$$ErrorActionPreference = ''SilentlyContinue''; $$installDir = ''$INSTDIR''; $$path = [Environment]::GetEnvironmentVariable(''Path'', ''User''); $$parts = @(); if ($$path) { $$parts = $$path -split '';'' | Where-Object { $$_ -and ($$_ -ine $$installDir) } }; [Environment]::SetEnvironmentVariable(''Path'', ($$installDir + '';'' + ($$parts -join '';'')), ''User'')"'
+  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$TEMP\AddToPath.ps1" -InstallDir "$INSTDIR"'
   SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
 FunctionEnd
 
 Function CleanupLegacyPythonCli
-  ; Best-effort cleanup for Python/pipx/uv-installed versions. All commands are
-  ; allowed to fail so installer success never depends on Python being present.
-  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$$ErrorActionPreference = ''SilentlyContinue''; $$installDir = Join-Path $$env:LOCALAPPDATA ''Programs\icuewidget-cli''; function Remove-LegacyIcuewidgetCommand($$p) { if (-not $$p) { return }; $$full = (Resolve-Path -LiteralPath $$p -ErrorAction SilentlyContinue).Path; if (-not $$full) { return }; if ($$full -like ($$installDir + ''\*'')) { return }; $$text = ''''; try { if ((Get-Item -LiteralPath $$full -ErrorAction SilentlyContinue).Length -lt 1048576) { $$text = Get-Content -LiteralPath $$full -Raw -ErrorAction SilentlyContinue } } catch {}; $$isLegacy = ($$full -match ''(?i)\\(python|pipx|scripts|npm|node_modules)\\|@corsair|icuewidget_cli'') -or ($$text -match ''(?i)python|icuewidget_cli|@corsair/icuewidget-cli|node-bin/icuewidget''); if (-not $$isLegacy) { return }; $$stem = [IO.Path]::Combine([IO.Path]::GetDirectoryName($$full), [IO.Path]::GetFileNameWithoutExtension($$full)); foreach ($$candidate in @($$full, ($$stem + ''.exe''), ($$stem + ''-script.py''), ($$stem + ''.exe.manifest''), ($$stem + ''.cmd''), ($$stem + ''.ps1''))) { Remove-Item -LiteralPath $$candidate -Force -ErrorAction SilentlyContinue } }; if (Get-Command pipx -ErrorAction SilentlyContinue) { pipx uninstall icuewidget-cli | Out-Null }; if (Get-Command uv -ErrorAction SilentlyContinue) { uv tool uninstall icuewidget-cli | Out-Null }; $$paths = @(); $$paths += @(where.exe icuewidget 2>$$null); $$paths += @(Get-Command icuewidget -All -ErrorAction SilentlyContinue | ForEach-Object Source); foreach ($$p in ($$paths | Select-Object -Unique)) { Remove-LegacyIcuewidgetCommand $$p }"'
+  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$TEMP\CleanupLegacyPythonCli.ps1"'
 FunctionEnd
 
 Function CleanupNpmCli
-  ; Best-effort removal of any npm-globally-installed icuewidget-cli. The native
-  ; binary supersedes the npm package; all commands are allowed to fail so the
-  ; installer never depends on npm being present.
-  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$$ErrorActionPreference = ''SilentlyContinue''; if (Get-Command npm -ErrorAction SilentlyContinue) { npm uninstall -g @corsair/icuewidget-cli 2>$$null | Out-Null }"'
+  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$TEMP\CleanupNpmCli.ps1"'
 FunctionEnd
 
 Function un.RemoveFromPath
