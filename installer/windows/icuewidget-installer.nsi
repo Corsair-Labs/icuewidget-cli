@@ -19,6 +19,8 @@ Unicode true
 !define PRODUCT_NAME "iCUE Widget CLI"
 !define PRODUCT_PUBLISHER "Corsair"
 !define PRODUCT_BRAND "CORSAIR"
+
+BrandingText "${PRODUCT_BRAND}"
 !define INSTALL_REG_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define BRAND_ICON "${BRAND_ASSET_DIR}\corsair-cli.ico"
 !define BRAND_WIZARD_BITMAP "${BRAND_ASSET_DIR}\InstallerSideImage.bmp"
@@ -54,12 +56,10 @@ ShowUnInstDetails show
 
 !if /FileExists "${BRAND_HEADER_BITMAP}"
   !define MUI_HEADERIMAGE
-  !define MUI_HEADERIMAGE_RIGHT
   !define MUI_HEADERIMAGE_BITMAP "${BRAND_HEADER_BITMAP}"
 !else
   !if /FileExists "${NSIS_GRAPHICS_DIR}\Header\orange.bmp"
     !define MUI_HEADERIMAGE
-    !define MUI_HEADERIMAGE_RIGHT
     !define MUI_HEADERIMAGE_BITMAP "${NSIS_GRAPHICS_DIR}\Header\orange.bmp"
   !endif
 !endif
@@ -75,11 +75,19 @@ ShowUnInstDetails show
 !insertmacro MUI_LANGUAGE "English"
 
 Section "Install" SEC01
+  DetailPrint "[1/7] Cleaning up old installations..."
   Call CleanupNpmGlobal
+
+  DetailPrint "[2/7] Creating install directory..."
   SetOutPath "$INSTDIR"
+
+  DetailPrint "[3/7] Extracting icuewidget.exe..."
   File /oname=icuewidget.exe "${CLI_BINARY}"
+
+  DetailPrint "[4/7] Creating uninstaller..."
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
+  DetailPrint "[5/7] Writing registry entries..."
   WriteRegStr HKCU "${INSTALL_REG_KEY}" "DisplayName" "${PRODUCT_NAME}"
   WriteRegStr HKCU "${INSTALL_REG_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
   WriteRegStr HKCU "${INSTALL_REG_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
@@ -88,7 +96,10 @@ Section "Install" SEC01
   WriteRegDWORD HKCU "${INSTALL_REG_KEY}" "NoModify" 1
   WriteRegDWORD HKCU "${INSTALL_REG_KEY}" "NoRepair" 1
 
+  DetailPrint "[6/7] Updating PATH..."
   Call AddToPath
+
+  DetailPrint "[7/7] Installation complete."
 SectionEnd
 
 Section "Uninstall"
