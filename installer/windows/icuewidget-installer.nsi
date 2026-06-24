@@ -117,7 +117,9 @@ Function AddToPath
   ${EndIf}
 
   WriteRegExpandStr HKCU "Environment" "Path" "$0"
-  SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
+  ; Use SendMessageTimeout with SMTO_ABORTIFHUNG so a hung window can't
+  ; freeze the installer.  HWND_BROADCAST=0xffff, WM_SETTINGCHANGE=0x001a.
+  System::Call "user32::SendMessageTimeout(i 0xffff, i 0x001a, i 0, w 'Environment', i 2, i 5000, *i 0) i .r0"
 FunctionEnd
 
 ; ---------------------------------------------------------------------------
@@ -174,7 +176,7 @@ Function un.RemoveFromPath
     Call un.RemovePathSegment
     Pop $0
     WriteRegExpandStr HKCU "Environment" "Path" "$0"
-    SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
+    System::Call "user32::SendMessageTimeout(i 0xffff, i 0x001a, i 0, w 'Environment', i 2, i 5000, *i 0) i .r0"
   ${EndIf}
 FunctionEnd
 
