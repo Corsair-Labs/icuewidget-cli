@@ -27,12 +27,12 @@ function Remove-LegacyIcuewidgetCommand($p) {
     }
 }
 
-if (Get-Command pipx -ErrorAction SilentlyContinue) { pipx uninstall icuewidget-cli | Out-Null }
-if (Get-Command uv -ErrorAction SilentlyContinue) { uv tool uninstall icuewidget-cli | Out-Null }
+if (Get-Command pipx -ErrorAction SilentlyContinue) { pipx uninstall icuewidget-cli *> $null }
+if (Get-Command uv -ErrorAction SilentlyContinue) { uv tool uninstall icuewidget-cli *> $null }
 
 foreach ($python in @('python', 'py')) {
     if (Get-Command $python -ErrorAction SilentlyContinue) {
-        & $python -m pip uninstall -y icuewidget-cli | Out-Null
+        & $python -m pip uninstall -y icuewidget-cli *> $null
     }
 }
 

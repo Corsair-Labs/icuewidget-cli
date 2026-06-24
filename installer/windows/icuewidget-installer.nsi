@@ -37,14 +37,14 @@ OutFile "${OUT_FILE}"
 InstallDir "$PROGRAMFILES\Corsair\iCUE Widget CLI"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
-ShowInstDetails show
-ShowUnInstDetails show
+ShowInstDetails nevershow
+ShowUnInstDetails nevershow
 
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "Install ${PRODUCT_NAME}"
-!define MUI_WELCOMEPAGE_TEXT "This wizard installs ${PRODUCT_NAME} for all users and adds the icuewidget command to PATH. Administrator permission is required."
+!define MUI_WELCOMEPAGE_TEXT "This wizard installs ${PRODUCT_NAME}."
 !define MUI_FINISHPAGE_TITLE "${PRODUCT_NAME} Installed"
-!define MUI_FINISHPAGE_TEXT "${PRODUCT_NAME} is ready to use.$\\n$\\nOpen a new Command Prompt or PowerShell window and run: icuewidget"
+!define MUI_FINISHPAGE_TEXT "${PRODUCT_NAME} is ready to use.$\r$\n$\r$\nOpen a new Command Prompt or PowerShell window and run: icuewidget"
 
 !if /FileExists "${BRAND_ICON}"
   !define MUI_ICON "${BRAND_ICON}"
@@ -79,29 +79,26 @@ Function .onInit
 FunctionEnd
 
 Section "Install" SEC01
-  DetailPrint "[1/7] Preparing installer resources..."
   InitPluginsDir
   SetOutPath "$PLUGINSDIR"
   File /oname=AddToPath.ps1 "${ADD_TO_PATH_SCRIPT}"
   File /oname=CleanupLegacyPythonCli.ps1 "${CLEANUP_LEGACY_SCRIPT}"
 
-  DetailPrint "[2/7] Cleaning up old installations..."
+  DetailPrint "Cleaning up older CLI versions..."
   Call CleanupLegacyInstallations
 
-  DetailPrint "[3/7] Creating install directory..."
   SetOutPath "$INSTDIR"
 
-  DetailPrint "[4/7] Extracting icuewidget.exe..."
+  DetailPrint "Installing ${PRODUCT_NAME}..."
   File /oname=icuewidget.exe "${CLI_BINARY}"
 
-  DetailPrint "[5/7] Creating uninstaller..."
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-  DetailPrint "[6/7] Adding icuewidget to system PATH..."
-  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\AddToPath.ps1" -InstallDir "$INSTDIR"'
+  DetailPrint "Adding icuewidget to system PATH..."
+  nsExec::Exec 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\AddToPath.ps1" -InstallDir "$INSTDIR"'
   SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
 
-  DetailPrint "[7/7] Writing registry entries..."
+  DetailPrint "Finalizing installation..."
   WriteRegStr HKLM "${INSTALL_REG_KEY}" "DisplayName" "${PRODUCT_NAME}"
   WriteRegStr HKLM "${INSTALL_REG_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
   WriteRegStr HKLM "${INSTALL_REG_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
@@ -127,15 +124,15 @@ SectionEnd
 ; and old command shims before installing the native binary.
 ; ---------------------------------------------------------------------------
 Function CleanupLegacyInstallations
-  nsExec::ExecToLog 'cmd.exe /c npm uninstall -g @icue/icuewidget-cli 2>nul'
-  nsExec::ExecToLog 'cmd.exe /c pipx uninstall icuewidget-cli 2>nul'
-  nsExec::ExecToLog 'cmd.exe /c uv tool uninstall icuewidget-cli 2>nul'
-  nsExec::ExecToLog 'cmd.exe /c python -m pip uninstall -y icuewidget-cli 2>nul'
-  nsExec::ExecToLog 'cmd.exe /c py -m pip uninstall -y icuewidget-cli 2>nul'
-  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\CleanupLegacyPythonCli.ps1" -InstallDir "$INSTDIR"'
+  nsExec::Exec 'cmd.exe /c npm uninstall -g @icue/icuewidget-cli >nul 2>nul'
+  nsExec::Exec 'cmd.exe /c pipx uninstall icuewidget-cli >nul 2>nul'
+  nsExec::Exec 'cmd.exe /c uv tool uninstall icuewidget-cli >nul 2>nul'
+  nsExec::Exec 'cmd.exe /c python -m pip uninstall -y icuewidget-cli >nul 2>nul'
+  nsExec::Exec 'cmd.exe /c py -m pip uninstall -y icuewidget-cli >nul 2>nul'
+  nsExec::Exec 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\CleanupLegacyPythonCli.ps1" -InstallDir "$INSTDIR"'
 FunctionEnd
 
 Function un.RemoveFromMachinePath
-  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$$installDir = ''$INSTDIR''; $$path = [Environment]::GetEnvironmentVariable(''Path'', ''Machine''); $$parts = if ($$path) { $$path -split '';'' | Where-Object { $$_ -and ($$_ -ine $$installDir) } } else { @() }; [Environment]::SetEnvironmentVariable(''Path'', ($$parts -join '';''), ''Machine'')"'
+  nsExec::Exec 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$$installDir = ''$INSTDIR''; $$path = [Environment]::GetEnvironmentVariable(''Path'', ''Machine''); $$parts = if ($$path) { $$path -split '';'' | Where-Object { $$_ -and ($$_ -ine $$installDir) } } else { @() }; [Environment]::SetEnvironmentVariable(''Path'', ($$parts -join '';''), ''Machine'')"'
   SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
 FunctionEnd
