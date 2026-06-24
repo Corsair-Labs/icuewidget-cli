@@ -1,12 +1,16 @@
+param([string]$InstallDir)
+
 $ErrorActionPreference = 'SilentlyContinue'
 
-$installDir = Join-Path $env:LOCALAPPDATA 'Programs\icuewidget-cli'
+if (-not $InstallDir) {
+    $InstallDir = Join-Path $env:ProgramFiles 'Corsair\iCUE Widget CLI'
+}
 
 function Remove-LegacyIcuewidgetCommand($p) {
     if (-not $p) { return }
     $full = (Resolve-Path -LiteralPath $p -ErrorAction SilentlyContinue).Path
     if (-not $full) { return }
-    if ($full -like ($installDir + '\*')) { return }
+    if ($full -like ($InstallDir + '\*')) { return }
     $text = ''
     try {
         if ((Get-Item -LiteralPath $full -ErrorAction SilentlyContinue).Length -lt 1048576) {
@@ -25,6 +29,12 @@ function Remove-LegacyIcuewidgetCommand($p) {
 
 if (Get-Command pipx -ErrorAction SilentlyContinue) { pipx uninstall icuewidget-cli | Out-Null }
 if (Get-Command uv -ErrorAction SilentlyContinue) { uv tool uninstall icuewidget-cli | Out-Null }
+
+foreach ($python in @('python', 'py')) {
+    if (Get-Command $python -ErrorAction SilentlyContinue) {
+        & $python -m pip uninstall -y icuewidget-cli | Out-Null
+    }
+}
 
 $paths = @()
 $paths += @(where.exe icuewidget 2>$null)

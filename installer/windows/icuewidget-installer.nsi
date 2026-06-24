@@ -1,6 +1,8 @@
 Unicode true
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
+!include "WinMessages.nsh"
+!include "x64.nsh"
 
 !ifndef PRODUCT_VERSION
   !define PRODUCT_VERSION "1.0.0"
@@ -14,6 +16,9 @@ Unicode true
 !ifndef BRAND_ASSET_DIR
   !define BRAND_ASSET_DIR "${__FILEDIR__}\assets"
 !endif
+!ifndef INSTALLER_RESOURCE_DIR
+  !define INSTALLER_RESOURCE_DIR "${__FILEDIR__}\resources"
+!endif
 
 !define PRODUCT_NAME "iCUE Widget CLI"
 !define PRODUCT_PUBLISHER "Corsair"
@@ -24,20 +29,22 @@ BrandingText "${PRODUCT_BRAND}"
 !define BRAND_ICON "${BRAND_ASSET_DIR}\corsair-cli.ico"
 !define BRAND_WIZARD_BITMAP "${BRAND_ASSET_DIR}\InstallerSideImage.bmp"
 !define NSIS_GRAPHICS_DIR "${NSISDIR}\Contrib\Graphics"
+!define ADD_TO_PATH_SCRIPT "${INSTALLER_RESOURCE_DIR}\AddToPath.ps1"
+!define CLEANUP_LEGACY_SCRIPT "${INSTALLER_RESOURCE_DIR}\CleanupLegacyPythonCli.ps1"
 
 Name "${PRODUCT_NAME}"
 OutFile "${OUT_FILE}"
-InstallDir "$LOCALAPPDATA\Programs\icuewidget-cli"
-RequestExecutionLevel user
+InstallDir "$PROGRAMFILES\Corsair\iCUE Widget CLI"
+RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 ShowInstDetails show
 ShowUnInstDetails show
 
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "Install ${PRODUCT_NAME}"
-!define MUI_WELCOMEPAGE_TEXT "This wizard installs ${PRODUCT_NAME} for your user account."
+!define MUI_WELCOMEPAGE_TEXT "This wizard installs ${PRODUCT_NAME} for all users and adds the icuewidget command to PATH. Administrator permission is required."
 !define MUI_FINISHPAGE_TITLE "${PRODUCT_NAME} Installed"
-!define MUI_FINISHPAGE_TEXT "${PRODUCT_NAME} has been installed to:$\\n$\\n$INSTDIR$\\n$\\nUse the full path or add it to your PATH manually."
+!define MUI_FINISHPAGE_TEXT "${PRODUCT_NAME} is ready to use.$\\n$\\nOpen a new Command Prompt or PowerShell window and run: icuewidget"
 
 !if /FileExists "${BRAND_ICON}"
   !define MUI_ICON "${BRAND_ICON}"
@@ -64,47 +71,71 @@ ShowUnInstDetails show
 
 !insertmacro MUI_LANGUAGE "English"
 
-Section "Install" SEC01
-  DetailPrint "[1/7] Cleaning up old installations..."
-  Call CleanupNpmGlobal
+Function .onInit
+  ${If} ${RunningX64}
+    SetRegView 64
+    StrCpy $INSTDIR "$PROGRAMFILES64\Corsair\iCUE Widget CLI"
+  ${EndIf}
+FunctionEnd
 
-  DetailPrint "[2/7] Creating install directory..."
+Section "Install" SEC01
+  DetailPrint "[1/7] Preparing installer resources..."
+  InitPluginsDir
+  SetOutPath "$PLUGINSDIR"
+  File /oname=AddToPath.ps1 "${ADD_TO_PATH_SCRIPT}"
+  File /oname=CleanupLegacyPythonCli.ps1 "${CLEANUP_LEGACY_SCRIPT}"
+
+  DetailPrint "[2/7] Cleaning up old installations..."
+  Call CleanupLegacyInstallations
+
+  DetailPrint "[3/7] Creating install directory..."
   SetOutPath "$INSTDIR"
 
-  DetailPrint "[3/7] Extracting icuewidget.exe..."
+  DetailPrint "[4/7] Extracting icuewidget.exe..."
   File /oname=icuewidget.exe "${CLI_BINARY}"
 
-  DetailPrint "[4/7] Creating uninstaller..."
+  DetailPrint "[5/7] Creating uninstaller..."
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-  DetailPrint "[5/7] Writing registry entries..."
-  WriteRegStr HKCU "${INSTALL_REG_KEY}" "DisplayName" "${PRODUCT_NAME}"
-  WriteRegStr HKCU "${INSTALL_REG_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
-  WriteRegStr HKCU "${INSTALL_REG_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
-  WriteRegStr HKCU "${INSTALL_REG_KEY}" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "${INSTALL_REG_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
-  WriteRegDWORD HKCU "${INSTALL_REG_KEY}" "NoModify" 1
-  WriteRegDWORD HKCU "${INSTALL_REG_KEY}" "NoRepair" 1
+  DetailPrint "[6/7] Adding icuewidget to system PATH..."
+  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\AddToPath.ps1" -InstallDir "$INSTDIR"'
+  SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
 
-  DetailPrint "[6/7] Installation complete."
+  DetailPrint "[7/7] Writing registry entries..."
+  WriteRegStr HKLM "${INSTALL_REG_KEY}" "DisplayName" "${PRODUCT_NAME}"
+  WriteRegStr HKLM "${INSTALL_REG_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
+  WriteRegStr HKLM "${INSTALL_REG_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
+  WriteRegStr HKLM "${INSTALL_REG_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKLM "${INSTALL_REG_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
+  WriteRegStr HKLM "${INSTALL_REG_KEY}" "QuietUninstallString" '"$INSTDIR\Uninstall.exe" /S'
+  WriteRegDWORD HKLM "${INSTALL_REG_KEY}" "NoModify" 1
+  WriteRegDWORD HKLM "${INSTALL_REG_KEY}" "NoRepair" 1
+
+  DetailPrint "Installation complete. Open a new terminal and run: icuewidget"
 SectionEnd
 
 Section "Uninstall"
+  Call un.RemoveFromMachinePath
   Delete "$INSTDIR\icuewidget.exe"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
-  DeleteRegKey HKCU "${INSTALL_REG_KEY}"
+  DeleteRegKey HKLM "${INSTALL_REG_KEY}"
 SectionEnd
 
 ; ---------------------------------------------------------------------------
-; CleanupNpmGlobal: Uninstall any npm/pipx/uv global package.  Uses cmd.exe
-; which is a fraction of the size of PowerShell and triggers much fewer
-; security alerts.  All commands are best-effort (2>nul silence).
+; CleanupLegacyInstallations: best-effort cleanup for npm/pipx/uv/Python installs
+; and old command shims before installing the native binary.
 ; ---------------------------------------------------------------------------
-Function CleanupNpmGlobal
+Function CleanupLegacyInstallations
   nsExec::ExecToLog 'cmd.exe /c npm uninstall -g @icue/icuewidget-cli 2>nul'
   nsExec::ExecToLog 'cmd.exe /c pipx uninstall icuewidget-cli 2>nul'
   nsExec::ExecToLog 'cmd.exe /c uv tool uninstall icuewidget-cli 2>nul'
+  nsExec::ExecToLog 'cmd.exe /c python -m pip uninstall -y icuewidget-cli 2>nul'
+  nsExec::ExecToLog 'cmd.exe /c py -m pip uninstall -y icuewidget-cli 2>nul'
+  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\CleanupLegacyPythonCli.ps1" -InstallDir "$INSTDIR"'
 FunctionEnd
 
-
+Function un.RemoveFromMachinePath
+  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$$installDir = ''$INSTDIR''; $$path = [Environment]::GetEnvironmentVariable(''Path'', ''Machine''); $$parts = if ($$path) { $$path -split '';'' | Where-Object { $$_ -and ($$_ -ine $$installDir) } } else { @() }; [Environment]::SetEnvironmentVariable(''Path'', ($$parts -join '';''), ''Machine'')"'
+  SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
+FunctionEnd
