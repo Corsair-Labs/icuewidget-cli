@@ -1,6 +1,5 @@
 Unicode true
 !include "MUI2.nsh"
-!include "WordFunc.nsh"
 !include "LogicLib.nsh"
 
 !ifndef PRODUCT_VERSION
@@ -36,9 +35,9 @@ ShowUnInstDetails show
 
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "Install ${PRODUCT_NAME}"
-!define MUI_WELCOMEPAGE_TEXT "This wizard installs ${PRODUCT_NAME} for your user account and adds it to your PATH."
+!define MUI_WELCOMEPAGE_TEXT "This wizard installs ${PRODUCT_NAME} for your user account."
 !define MUI_FINISHPAGE_TITLE "${PRODUCT_NAME} Installed"
-!define MUI_FINISHPAGE_TEXT "${PRODUCT_NAME} is ready to use from any new terminal window."
+!define MUI_FINISHPAGE_TEXT "${PRODUCT_NAME} has been installed to:$\\n$\\n$INSTDIR$\\n$\\nUse the full path or add it to your PATH manually."
 
 !if /FileExists "${BRAND_ICON}"
   !define MUI_ICON "${BRAND_ICON}"
@@ -87,71 +86,15 @@ Section "Install" SEC01
   WriteRegDWORD HKCU "${INSTALL_REG_KEY}" "NoModify" 1
   WriteRegDWORD HKCU "${INSTALL_REG_KEY}" "NoRepair" 1
 
-  DetailPrint "[6/7] Updating PATH..."
-  Call AddToPath
-
-  DetailPrint "[7/7] Installation complete."
+  DetailPrint "[6/7] Installation complete."
 SectionEnd
 
 Section "Uninstall"
-  Call un.RemoveFromPath
   Delete "$INSTDIR\icuewidget.exe"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
   DeleteRegKey HKCU "${INSTALL_REG_KEY}"
 SectionEnd
-
-; ---------------------------------------------------------------------------
-; AddToPath: Prepends $INSTDIR to the user's PATH.  Pure NSIS — no external
-; process launched, so Norton/Security software sees nothing to flag.
-; ---------------------------------------------------------------------------
-Function AddToPath
-  ReadRegStr $0 HKCU "Environment" "Path"
-  Push "$0"
-  Push "$INSTDIR"
-  Call RemovePathSegment
-  Pop $0
-
-  ${If} $0 == ""
-    StrCpy $0 "$INSTDIR"
-  ${Else}
-    StrCpy $0 "$INSTDIR;$0"
-  ${EndIf}
-
-  WriteRegExpandStr HKCU "Environment" "Path" "$0"
-FunctionEnd
-
-; ---------------------------------------------------------------------------
-; RemovePathSegment: given a semicolon-separated list and a segment,
-; returns the list with that segment removed.
-; Stack: top=segment, bottom=list  →  top=list
-; ---------------------------------------------------------------------------
-Function RemovePathSegment
-  Exch $1
-  Exch
-  Exch $0
-  Push $2
-  Push $3
-  StrCpy $2 ""
-  ${Do}
-    ${WordFind} "$0" ";" "+1" $3
-    ${If} $3 == ""
-      ${Break}
-    ${EndIf}
-    ${If} $3 != $1
-      ${If} $2 == ""
-        StrCpy $2 "$3"
-      ${Else}
-        StrCpy $2 "$2;$3"
-      ${EndIf}
-    ${EndIf}
-    ${WordFind} "$0" ";" "E+1" $0
-  ${Loop}
-  Pop $3
-  Exch $2
-  Exch
-  Pop $1
-FunctionEnd
 
 ; ---------------------------------------------------------------------------
 ; CleanupNpmGlobal: Uninstall any npm/pipx/uv global package.  Uses cmd.exe
@@ -164,43 +107,4 @@ Function CleanupNpmGlobal
   nsExec::ExecToLog 'cmd.exe /c uv tool uninstall icuewidget-cli 2>nul'
 FunctionEnd
 
-; ---------------------------------------------------------------------------
-; Uninstaller helper
-; ---------------------------------------------------------------------------
-Function un.RemoveFromPath
-  ReadRegStr $0 HKCU "Environment" "Path"
-  ${If} $0 != ""
-    Push "$0"
-    Push "$INSTDIR"
-    Call un.RemovePathSegment
-    Pop $0
-    WriteRegExpandStr HKCU "Environment" "Path" "$0"
-  ${EndIf}
-FunctionEnd
 
-Function un.RemovePathSegment
-  Exch $1
-  Exch
-  Exch $0
-  Push $2
-  Push $3
-  StrCpy $2 ""
-  ${Do}
-    ${WordFind} "$0" ";" "+1" $3
-    ${If} $3 == ""
-      ${Break}
-    ${EndIf}
-    ${If} $3 != $1
-      ${If} $2 == ""
-        StrCpy $2 "$3"
-      ${Else}
-        StrCpy $2 "$2;$3"
-      ${EndIf}
-    ${EndIf}
-    ${WordFind} "$0" ";" "E+1" $0
-  ${Loop}
-  Pop $3
-  Exch $2
-  Exch
-  Pop $1
-FunctionEnd
