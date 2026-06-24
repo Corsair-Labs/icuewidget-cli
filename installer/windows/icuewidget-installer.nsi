@@ -24,7 +24,6 @@ BrandingText "${PRODUCT_BRAND}"
 !define INSTALL_REG_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define BRAND_ICON "${BRAND_ASSET_DIR}\corsair-cli.ico"
 !define BRAND_WIZARD_BITMAP "${BRAND_ASSET_DIR}\InstallerSideImage.bmp"
-!define BRAND_HEADER_BITMAP "${BRAND_ASSET_DIR}\CorsairLogo.bmp"
 !define NSIS_GRAPHICS_DIR "${NSISDIR}\Contrib\Graphics"
 
 Name "${PRODUCT_NAME}"
@@ -54,15 +53,7 @@ ShowUnInstDetails show
   !endif
 !endif
 
-!if /FileExists "${BRAND_HEADER_BITMAP}"
-  !define MUI_HEADERIMAGE
-  !define MUI_HEADERIMAGE_BITMAP "${BRAND_HEADER_BITMAP}"
-!else
-  !if /FileExists "${NSIS_GRAPHICS_DIR}\Header\orange.bmp"
-    !define MUI_HEADERIMAGE
-    !define MUI_HEADERIMAGE_BITMAP "${NSIS_GRAPHICS_DIR}\Header\orange.bmp"
-  !endif
-!endif
+; No header image — clean look, smaller installer.
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
@@ -128,9 +119,6 @@ Function AddToPath
   ${EndIf}
 
   WriteRegExpandStr HKCU "Environment" "Path" "$0"
-  ; Use SendMessageTimeout with SMTO_ABORTIFHUNG so a hung window can't
-  ; freeze the installer.  HWND_BROADCAST=0xffff, WM_SETTINGCHANGE=0x001a.
-  System::Call "user32::SendMessageTimeout(i 0xffff, i 0x001a, i 0, w 'Environment', i 2, i 5000, *i 0) i .r0"
 FunctionEnd
 
 ; ---------------------------------------------------------------------------
@@ -187,7 +175,6 @@ Function un.RemoveFromPath
     Call un.RemovePathSegment
     Pop $0
     WriteRegExpandStr HKCU "Environment" "Path" "$0"
-    System::Call "user32::SendMessageTimeout(i 0xffff, i 0x001a, i 0, w 'Environment', i 2, i 5000, *i 0) i .r0"
   ${EndIf}
 FunctionEnd
 
