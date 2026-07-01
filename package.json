@@ -27,7 +27,7 @@
     "widget",
     "cli"
   ],
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "devDependencies": {
     "@yao-pkg/pkg": "^6.5.1"
   }

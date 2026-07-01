@@ -1,0 +1,29 @@
+# Development and build scripts
+scripts/
+installer/
+
+# Tests
+test-node/
+
+# CI/CD
+Jenkinsfile
+.github/
+
+# Example generated widget
+MyWidget/
+*.icuewidget
+
+# Build outputs
+build/
+dist/
+release/
+
+# OS files
+.DS_Store
+
+# Temporary files
+tmp/
+*.log
+*.tgz
+*.pkg
+*.exe
