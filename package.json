@@ -1,10 +1,27 @@
 {
-  "name": "@icue/icuewidget-cli",
-  "version": "0.4.0",
+  "name": "icuewidget-cli",
+  "version": "0.4.43",
   "description": "Create, validate, update, and package CORSAIR iCUE widgets.",
+  "keywords": [
+    "corsair",
+    "icue",
+    "widget",
+    "cli"
+  ],
+  "homepage": "https://gitlab.com/corsair-gaming/various-projects/icuewidgets-cli#readme",
+  "bugs": {
+    "url": "https://gitlab.com/corsair-gaming/various-projects/icuewidgets-cli/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://gitlab.com/corsair-gaming/various-projects/icuewidgets-cli.git"
+  },
+  "license": "Apache-2.0",
+  "author": "CORSAIR",
   "type": "module",
+  "main": "index.js",
   "bin": {
-    "icuewidget": "./node-bin/icuewidget.js"
+    "icuewidget": "node-bin/icuewidget.js"
   },
   "files": [
     "node-bin/",
@@ -18,17 +35,11 @@
     "build": "npm run build:binaries && npm run build:installers",
     "check": "node --check scripts/build-binaries.mjs && node --check scripts/build-installers.mjs"
   },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "keywords": [
-    "corsair",
-    "icue",
-    "widget",
-    "cli"
-  ],
-  "license": "Apache-2.0",
+  "dependencies": {},
   "devDependencies": {
     "@yao-pkg/pkg": "^6.5.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
