@@ -124,7 +124,7 @@ SectionEnd
 ; and old command shims before installing the native binary.
 ; ---------------------------------------------------------------------------
 Function CleanupLegacyInstallations
-  nsExec::Exec 'cmd.exe /c npm uninstall -g @icue/icuewidget-cli >nul 2>nul'
+  nsExec::Exec 'cmd.exe /c npm uninstall -g icuewidget-cli >nul 2>nul'
   nsExec::Exec 'cmd.exe /c pipx uninstall icuewidget-cli >nul 2>nul'
   nsExec::Exec 'cmd.exe /c uv tool uninstall icuewidget-cli >nul 2>nul'
   nsExec::Exec 'cmd.exe /c python -m pip uninstall -y icuewidget-cli >nul 2>nul'

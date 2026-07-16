@@ -1,6 +1,6 @@
 export const APP_NAME = "icuewidget";
 export const NPM_PACKAGE_NAME = "icuewidget-cli";
-export const CLI_VERSION = "0.4.44";
+export const CLI_VERSION = "0.4.45";
 export const DEFAULT_APP_VERSION = "5.45";
 export const DEFAULT_FRAMEWORK_VERSION = "1.0.0";
 export const DEFAULT_PLATFORM = "windows";

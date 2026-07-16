@@ -33,7 +33,7 @@ test("notifyAboutUpdate prints cached update and triggers fresh check", async ()
   });
 
   assert.match(output, /Update available: icuewidget 0\.4\.0 → 0\.4\.3/);
-  assert.match(output, /npm install -g @icue\/icuewidget-cli@latest/);
+  assert.match(output, /npm install -g icuewidget-cli@latest/);
 });
 
 test("notifyAboutUpdate respects opt-out", async () => {
