@@ -95,6 +95,7 @@ async function validateIndex(root, warnings) {
 
   validateHeadWellFormed(html);
   validatePropertyTypes(html);
+  validatePropertyGroups(html);
 
   const assetRefs = [...extractAttributes(html, "href"), ...extractAttributes(html, "src")];
   for (const ref of assetRefs) {
@@ -154,6 +155,30 @@ function validatePropertyTypes(html) {
       );
     }
   }
+}
+
+// The x-icue-groups script organizes property controls into settings panels. iCUE
+// JSON-parses it, so malformed JSON or an empty group silently drops the panel. Catch
+// it here. Group title/info are JS expressions (e.g. tr('...')) but are always JSON
+// strings, so the block as a whole stays valid JSON.
+function validatePropertyGroups(html) {
+  const match = /<script\b[^>]*\bid=["']x-icue-groups["'][^>]*>([\s\S]*?)<\/script>/i.exec(html);
+  if (!match) return;
+  let groups;
+  try {
+    groups = JSON.parse(match[1]);
+  } catch (error) {
+    throw new ValidationError(`x-icue-groups is not valid JSON: ${error.message}`);
+  }
+  if (!Array.isArray(groups)) throw new ValidationError("x-icue-groups must be a JSON array of groups.");
+  groups.forEach((group, index) => {
+    if (!group || typeof group !== "object" || Array.isArray(group)) {
+      throw new ValidationError(`x-icue-groups[${index}] must be an object.`);
+    }
+    if (!Array.isArray(group.properties) || group.properties.length === 0) {
+      throw new ValidationError(`x-icue-groups[${index}] must list at least one property.`);
+    }
+  });
 }
 
 function* extractAttributes(html, attribute) {

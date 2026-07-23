@@ -15,12 +15,22 @@ export function translationTemplate(widgetName) {
 }
 
 export function indexTemplate(widgetName) {
+  // The widget title and the first property group share the widget name so the group
+  // merges with the default settings panel. tr() marks both for translation.
+  const titleExpr = `tr('${escapeSingleQuoted(widgetName)}')`;
+  const groups = renderGroups([
+    { title: titleExpr, properties: ["headline", "showSubtitle", "subtitle"] },
+    {
+      title: "tr('Widget Personalization')",
+      properties: ["textColor", "accentColor", "backgroundColor", "transparency"],
+    },
+  ]);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(widgetName)}</title>
+  <title>${escapeHtml(titleExpr)}</title>
   <link rel="icon" href="resources/icon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="styles/main.css" />
   <meta name="x-icue-property" content="headline" data-label="tr('Headline')" data-type="textfield" data-default="'Hello World'" />
@@ -30,6 +40,9 @@ export function indexTemplate(widgetName) {
   <meta name="x-icue-property" content="accentColor" data-label="tr('Accent Color')" data-type="color" data-default="'#59c2ff'" />
   <meta name="x-icue-property" content="backgroundColor" data-label="tr('Background')" data-type="color" data-default="'#111827'" />
   <meta name="x-icue-property" content="transparency" data-label="tr('Transparency')" data-type="slider" data-default="20" data-min="0" data-max="100" data-step="1" data-unit-label="'%'" />
+  <script id="x-icue-groups" type="application/json">
+${groups}
+  </script>
 </head>
 <body>
   <main id="content">
@@ -149,4 +162,28 @@ function escapeHtml(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+// Escape a value for embedding inside a single-quoted JavaScript string, e.g. tr('...').
+function escapeSingleQuoted(value) {
+  return String(value).replaceAll("\\", "\\\\").replaceAll("'", "\\'");
+}
+
+// Render the x-icue-groups JSON body. Each group's title/info are already valid JS
+// expressions (e.g. tr('...')) and are serialized as JSON strings; properties stay inline.
+function renderGroups(groups) {
+  const body = groups
+    .map((group) => {
+      const props = group.properties.map((name) => JSON.stringify(name)).join(", ");
+      const lines = [
+        "    {",
+        `      "title": ${JSON.stringify(group.title)},`,
+        `      "properties": [${props}]${group.info ? "," : ""}`,
+      ];
+      if (group.info) lines.push(`      "info": ${JSON.stringify(group.info)}`);
+      lines.push("    }");
+      return lines.join("\n");
+    })
+    .join(",\n");
+  return `  [\n${body}\n  ]`;
 }

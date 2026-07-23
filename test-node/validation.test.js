@@ -86,3 +86,35 @@ test("rejects non-self-closed void element in head", async () => {
     return true;
   });
 });
+
+test("accepts a valid x-icue-groups script", async () => {
+  const dir = await tmpWidget(
+    HEAD_META +
+      '<meta name="x-icue-property" content="a" data-label="tr(\'A\')" data-type="textfield" data-default="\'\'" />' +
+      '<script id="x-icue-groups" type="application/json">[{"title":"tr(\'Main\')","properties":["a"]}]</script>'
+  );
+  const result = await validateWidget(dir);
+  assert.equal(result.manifest.name, "TestWidget");
+});
+
+test("rejects malformed x-icue-groups JSON", async () => {
+  const dir = await tmpWidget(
+    HEAD_META + '<script id="x-icue-groups" type="application/json">[{"title":"tr(\'Main\')",}]</script>'
+  );
+  await assert.rejects(validateWidget(dir), (error) => {
+    assert.ok(error instanceof ValidationError);
+    assert.match(error.message, /x-icue-groups is not valid JSON/i);
+    return true;
+  });
+});
+
+test("rejects x-icue-groups group with no properties", async () => {
+  const dir = await tmpWidget(
+    HEAD_META + '<script id="x-icue-groups" type="application/json">[{"title":"tr(\'Main\')","properties":[]}]</script>'
+  );
+  await assert.rejects(validateWidget(dir), (error) => {
+    assert.ok(error instanceof ValidationError);
+    assert.match(error.message, /at least one property/i);
+    return true;
+  });
+});
