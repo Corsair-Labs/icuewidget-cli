@@ -4,6 +4,7 @@ import vm from "node:vm";
 import {
   ALLOWED_DEVICE_TYPES,
   ALLOWED_PLATFORMS,
+  ALLOWED_PROPERTY_TYPES,
   APP_VERSION_RE,
   IDENTIFIER_RE,
   SEMVER_RE,
@@ -92,12 +93,66 @@ async function validateIndex(root, warnings) {
   if (!/rel=["'][^"']*icon/i.test(html)) warnings.push("index.html does not reference a favicon/icon.");
   if (!html.includes("icueEvents")) warnings.push("index.html or scripts do not reference icueEvents.");
 
+  validateHeadWellFormed(html);
+  validatePropertyTypes(html);
+
   const assetRefs = [...extractAttributes(html, "href"), ...extractAttributes(html, "src")];
   for (const ref of assetRefs) {
     if (isRemote(ref) || ref.startsWith("data:") || ref.startsWith("#")) continue;
     await validateRelativeFile(root, stripQuery(ref), `index.html asset reference ${ref}`);
     if (ref.endsWith(".css")) await validateCss(path.join(root, stripQuery(ref)));
     if (ref.endsWith(".js")) await validateJs(path.join(root, stripQuery(ref)));
+  }
+}
+
+// iCUE imports a widget by parsing <head> with a strict XML parser (Qt QDomDocument).
+// HTML5 void elements written without a self-closing slash (e.g. `<meta charset="utf-8">`)
+// are well-formed HTML but invalid XML: the parser never closes the tag, fails at </head>,
+// and reports "Missing Title Element" because <title> is never reached. Catch it here so
+// the widget fails validation instead of silently producing a package iCUE cannot import.
+const VOID_ELEMENTS = ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"];
+
+function validateHeadWellFormed(html) {
+  const headMatch = /<head\b[^>]*>([\s\S]*?)<\/head>/i.exec(html);
+  if (!headMatch) return;
+  const head = headMatch[1]
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, "");
+  const re = new RegExp(`<(${VOID_ELEMENTS.join("|")})\\b[^>]*?>`, "gi");
+  let match;
+  while ((match = re.exec(head))) {
+    if (!match[0].endsWith("/>")) {
+      throw new ValidationError(
+        `index.html <head> has a non-self-closed <${match[1].toLowerCase()}> element: ${match[0].trim()}. ` +
+          `iCUE parses the head as XML on import, so void elements must self-close (for example <${match[1].toLowerCase()} ... />). ` +
+          `Otherwise iCUE rejects the widget with "Missing Title Element".`
+      );
+    }
+  }
+}
+
+// Each x-icue-property meta declares a control via data-type. iCUE rejects the widget
+// with "Invalid meta parameter data type" if the value is not a known control type, so
+// catch unknown types (e.g. "text" instead of "textfield", "boolean" instead of "switch")
+// at validation time instead of on import.
+function validatePropertyTypes(html) {
+  const metaRe = /<meta\b[^>]*\bname=["']x-icue-property["'][^>]*>/gi;
+  let meta;
+  while ((meta = metaRe.exec(html))) {
+    const tag = meta[0];
+    const typeMatch = /\bdata-type=["']([^"']*)["']/i.exec(tag);
+    if (!typeMatch) {
+      throw new ValidationError(`x-icue-property is missing a data-type attribute: ${tag.trim()}`);
+    }
+    const type = typeMatch[1].trim();
+    if (!ALLOWED_PROPERTY_TYPES.has(type)) {
+      throw new ValidationError(
+        `x-icue-property has an invalid data-type "${type}". ` +
+          `iCUE accepts: ${[...ALLOWED_PROPERTY_TYPES].join(", ")}. ` +
+          `(For example use "textfield" for text input and "switch" for a boolean toggle.)`
+      );
+    }
   }
 }
 

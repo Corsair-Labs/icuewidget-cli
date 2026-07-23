@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { CLI_VERSION } from "../src-node/constants.js";
 import { isNewerVersion, notifyAboutUpdate, runUpdateCheckWorker } from "../src-node/update-check.js";
 
 test("semver comparison detects newer versions", () => {
@@ -19,8 +20,12 @@ test("notifyAboutUpdate prints cached update and triggers fresh check", async ()
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "icuewidget-update-"));
   const cacheDir = path.join(root, "cache");
   await fs.mkdir(path.join(cacheDir, "icuewidget-cli"), { recursive: true });
+  // Use a version that is always newer than the running CLI so the notice fires
+  // regardless of the current CLI_VERSION.
+  const [major] = CLI_VERSION.split(".");
+  const newerVersion = `${Number(major) + 1}.0.0`;
   await fs.writeFile(path.join(cacheDir, "icuewidget-cli", "update-check.json"), JSON.stringify({
-    latestVersion: "0.4.3",
+    latestVersion: newerVersion,
     checkedAt: 0,
   }), "utf8");
 
@@ -32,7 +37,7 @@ test("notifyAboutUpdate prints cached update and triggers fresh check", async ()
     stderr: { write(value) { output += value; } },
   });
 
-  assert.match(output, /Update available: icuewidget 0\.4\.0 → 0\.4\.3/);
+  assert.match(output, new RegExp(`Update available: icuewidget ${CLI_VERSION.replace(/\./g, "\\.")} → ${newerVersion.replace(/\./g, "\\.")}`));
   assert.match(output, /npm install -g icuewidget-cli@latest/);
 });
 

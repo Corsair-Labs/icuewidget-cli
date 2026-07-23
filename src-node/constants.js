@@ -1,6 +1,6 @@
 export const APP_NAME = "icuewidget";
 export const NPM_PACKAGE_NAME = "icuewidget-cli";
-export const CLI_VERSION = "0.4.45";
+export const CLI_VERSION = "0.4.46";
 export const DEFAULT_APP_VERSION = "5.45";
 export const DEFAULT_FRAMEWORK_VERSION = "1.0.0";
 export const DEFAULT_PLATFORM = "windows";
@@ -11,6 +11,21 @@ export const ALLOWED_DEVICE_TYPES = new Set([
   "dashboard_lcd",
   "pump_lcd",
   "keyboard_lcd",
+]);
+
+// Control types accepted by iCUE for x-icue-property meta parameters (data-type).
+// Anything else makes iCUE reject the widget with "Invalid meta parameter data type".
+export const ALLOWED_PROPERTY_TYPES = new Set([
+  "slider",
+  "switch",
+  "color",
+  "combobox",
+  "search-combobox",
+  "tab-buttons",
+  "textfield",
+  "media-selector",
+  "sensors-combobox",
+  "sensors-factory",
 ]);
 
 export const SEMVER_RE = /^\d+\.\d+\.\d+$/;

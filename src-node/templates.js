@@ -15,21 +15,21 @@ export function translationTemplate(widgetName) {
 }
 
 export function indexTemplate(widgetName) {
-  return `<!doctype html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(widgetName)}</title>
-  <link rel="icon" href="resources/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles/main.css">
-  <meta name="x-icue-property" content='{"name":"headline","label":"Headline","type":"text","default":"Hello World"}'>
-  <meta name="x-icue-property" content='{"name":"showSubtitle","label":"Show Subtitle","type":"boolean","default":true}'>
-  <meta name="x-icue-property" content='{"name":"subtitle","label":"Subtitle","type":"text","default":"Built with iCUE Widget CLI"}'>
-  <meta name="x-icue-property" content='{"name":"textColor","label":"Text Color","type":"color","default":"#ffffff"}'>
-  <meta name="x-icue-property" content='{"name":"accentColor","label":"Accent Color","type":"color","default":"#59c2ff"}'>
-  <meta name="x-icue-property" content='{"name":"backgroundColor","label":"Background","type":"color","default":"#111827"}'>
-  <meta name="x-icue-property" content='{"name":"transparency","label":"Transparency","type":"number","min":0,"max":100,"default":20}'>
+  <link rel="icon" href="resources/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles/main.css" />
+  <meta name="x-icue-property" content="headline" data-label="tr('Headline')" data-type="textfield" data-default="'Hello World'" />
+  <meta name="x-icue-property" content="showSubtitle" data-label="tr('Show Subtitle')" data-type="switch" data-default="true" />
+  <meta name="x-icue-property" content="subtitle" data-label="tr('Subtitle')" data-type="textfield" data-default="'Built with iCUE Widget CLI'" />
+  <meta name="x-icue-property" content="textColor" data-label="tr('Text Color')" data-type="color" data-default="'#ffffff'" />
+  <meta name="x-icue-property" content="accentColor" data-label="tr('Accent Color')" data-type="color" data-default="'#59c2ff'" />
+  <meta name="x-icue-property" content="backgroundColor" data-label="tr('Background')" data-type="color" data-default="'#111827'" />
+  <meta name="x-icue-property" content="transparency" data-label="tr('Transparency')" data-type="slider" data-default="20" data-min="0" data-max="100" data-step="1" data-unit-label="'%'" />
 </head>
 <body>
   <main id="content">
@@ -38,6 +38,16 @@ export function indexTemplate(widgetName) {
     <p id="subtitle">Built with iCUE Widget CLI</p>
   </main>
   <script src="scripts/main.js"></script>
+  <script>
+    icueEvents = {
+      onICUEInitialized: function(payload) { applySettings(payload && payload.settings); },
+      onDataUpdated: function(payload) { applySettings(payload && payload.settings); },
+    };
+
+    if (iCUE_initialized) {
+      applySettings();
+    }
+  </script>
 </body>
 </html>
 `;
@@ -114,15 +124,6 @@ function applySettings(settings = {}) {
   subtitle.textContent = state.subtitle;
   subtitle.hidden = !state.showSubtitle;
 }
-
-window.icueEvents = {
-  onICUEInitialized(payload) {
-    applySettings(payload?.settings);
-  },
-  onDataUpdated(payload) {
-    applySettings(payload?.settings);
-  },
-};
 
 applySettings();
 `;

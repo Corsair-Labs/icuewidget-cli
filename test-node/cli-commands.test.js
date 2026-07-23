@@ -26,7 +26,7 @@ async function makeWidget(dir) {
   await fs.writeFile(path.join(dir, "resources", "icon.svg"), "<svg/>", "utf8");
   await fs.writeFile(path.join(dir, "styles", "main.css"), "body { color: red; }", "utf8");
   await fs.writeFile(path.join(dir, "scripts", "main.js"), "window.icueEvents = {};", "utf8");
-  await fs.writeFile(path.join(dir, "index.html"), '<html><head><title>T</title><link rel="icon" href="resources/icon.svg"><link rel="stylesheet" href="styles/main.css"></head><body><script src="scripts/main.js"></script></body></html>', "utf8");
+  await fs.writeFile(path.join(dir, "index.html"), '<html><head><title>T</title><link rel="icon" href="resources/icon.svg" /><link rel="stylesheet" href="styles/main.css" /></head><body><script src="scripts/main.js"></script></body></html>', "utf8");
 }
 
 test("help output includes commands", () => {
