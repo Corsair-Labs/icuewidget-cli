@@ -19,6 +19,8 @@ import { notifyAboutUpdate, runUpdateCheckWorker } from "./update-check.js";
 import { ValidationError, validateWidget } from "./validation.js";
 import { createPackage } from "./zip.js";
 
+const COMMANDS = ["init", "validate", "update", "package"];
+
 export async function main(argv = process.argv) {
   try {
     const args = argv.slice(2);
@@ -30,7 +32,9 @@ export async function main(argv = process.argv) {
       printHelp();
       return;
     }
-    if (has(args, "--version") || has(args, "-v")) {
+    // `update <widget> --version <semver>` uses --version as a subcommand option, so only
+    // treat it as the global flag when no subcommand leads the argument list.
+    if (!COMMANDS.includes(args[0]) && (has(args, "--version") || has(args, "-v"))) {
       console.log(CLI_VERSION);
       return;
     }

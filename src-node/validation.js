@@ -23,7 +23,7 @@ export async function validateWidget(widgetDir) {
     }
   }
 
-  const manifest = await validateManifest(root);
+  const manifest = await validateManifest(root, warnings);
   if (await pathExists(path.join(root, "translation.json"))) {
     await readJson(path.join(root, "translation.json"));
   } else {
@@ -34,7 +34,7 @@ export async function validateWidget(widgetDir) {
   return { widgetDir: root, manifest, warnings };
 }
 
-async function validateManifest(root) {
+async function validateManifest(root, warnings) {
   const manifest = await readJson(path.join(root, "manifest.json"));
   if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
     throw new ValidationError("manifest.json must contain a JSON object");
@@ -78,6 +78,18 @@ async function validateManifest(root) {
   if (manifest.interactive !== undefined && typeof manifest.interactive !== "boolean") {
     throw new ValidationError("manifest.interactive must be a boolean when provided");
   }
+  if (manifest.interactive === true) {
+    const nonDashboardTypes = manifest.supported_devices
+      .map((d) => d.type)
+      .filter((t) => t !== "dashboard_lcd");
+    if (nonDashboardTypes.length > 0) {
+      warnings.push(
+        `manifest.interactive is true, but supported_devices includes ${nonDashboardTypes.join(", ")}. ` +
+          `iCUE only recognizes interactive widgets on dashboard_lcd (Xeneon Edge). ` +
+          `The widget will not appear for ${nonDashboardTypes.join(" or ")} devices.`
+      );
+    }
+  }
   if (manifest.required_plugins !== undefined) validateStringArray(manifest.required_plugins, "manifest.required_plugins");
   if (manifest.modules !== undefined) {
     validateStringArray(manifest.modules, "manifest.modules");
@@ -91,19 +103,23 @@ async function validateIndex(root, warnings) {
   const html = await fs.readFile(path.join(root, "index.html"), "utf8");
   if (!/<title>[^<]+<\/title>/i.test(html)) warnings.push("index.html does not define a <title>.");
   if (!/rel=["'][^"']*icon/i.test(html)) warnings.push("index.html does not reference a favicon/icon.");
-  if (!html.includes("icueEvents")) warnings.push("index.html or scripts do not reference icueEvents.");
 
   validateHeadWellFormed(html);
   validatePropertyTypes(html);
   validatePropertyGroups(html);
 
+  let referencesIcueEvents = html.includes("icueEvents");
   const assetRefs = [...extractAttributes(html, "href"), ...extractAttributes(html, "src")];
   for (const ref of assetRefs) {
     if (isRemote(ref) || ref.startsWith("data:") || ref.startsWith("#")) continue;
     await validateRelativeFile(root, stripQuery(ref), `index.html asset reference ${ref}`);
     if (ref.endsWith(".css")) await validateCss(path.join(root, stripQuery(ref)));
-    if (ref.endsWith(".js")) await validateJs(path.join(root, stripQuery(ref)));
+    if (ref.endsWith(".js")) {
+      const code = await validateJs(path.join(root, stripQuery(ref)));
+      if (code.includes("icueEvents")) referencesIcueEvents = true;
+    }
   }
+  if (!referencesIcueEvents) warnings.push("index.html or scripts do not reference icueEvents.");
 }
 
 // iCUE imports a widget by parsing <head> with a strict XML parser (Qt QDomDocument).
@@ -215,6 +231,7 @@ async function validateJs(filePath) {
   } catch (error) {
     throw new ValidationError(`${path.basename(filePath)} has invalid JavaScript: ${error.message}`);
   }
+  return code;
 }
 
 async function validateRelativeFile(root, relativePath, label) {

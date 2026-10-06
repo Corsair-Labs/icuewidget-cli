@@ -118,3 +118,16 @@ test("rejects x-icue-groups group with no properties", async () => {
     return true;
   });
 });
+
+test("does not warn about icueEvents when a referenced script handles it", async () => {
+  const dir = await tmpWidget();
+  const result = await validateWidget(dir);
+  assert.ok(!result.warnings.some((w) => /icueEvents/.test(w)));
+});
+
+test("warns when neither index.html nor referenced scripts reference icueEvents", async () => {
+  const dir = await tmpWidget();
+  await fs.writeFile(path.join(dir, "scripts", "main.js"), "console.log('hi');", "utf8");
+  const result = await validateWidget(dir);
+  assert.ok(result.warnings.some((w) => /icueEvents/.test(w)));
+});

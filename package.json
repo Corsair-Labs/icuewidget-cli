@@ -1,6 +1,6 @@
 {
   "name": "icuewidget-cli",
-  "version": "0.4.47",
+  "version": "0.4.48",
   "description": "Create, validate, update, and package CORSAIR iCUE widgets.",
   "keywords": [
     "corsair",

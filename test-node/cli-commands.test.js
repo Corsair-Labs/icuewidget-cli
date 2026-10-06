@@ -50,6 +50,39 @@ test("update command migrates and packages widget", async () => {
   assert.equal(await exists(path.join(root, "testwidget.icuewidget")), true);
 });
 
+test("update --version sets the manifest version instead of printing the CLI version", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "icuewidget-"));
+  const widgetDir = path.join(root, "widget");
+  await makeWidget(widgetDir);
+
+  const result = spawnSync(process.execPath, [bin, "update", widgetDir, "--min-app-version", "5.45", "--version", "1.0.2"], { encoding: "utf8", env: noUpdateEnv() });
+  assert.equal(result.status, 0, result.stderr);
+
+  const manifest = JSON.parse(await fs.readFile(path.join(widgetDir, "manifest.json"), "utf8"));
+  assert.equal(manifest.version, "1.0.2");
+  assert.equal(await exists(path.join(root, "testwidget.icuewidget")), true);
+});
+
+test("global --version still prints the CLI version", () => {
+  const result = spawnSync(process.execPath, [bin, "--version"], { encoding: "utf8", env: noUpdateEnv() });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout.trim(), /^\d+\.\d+\.\d+$/);
+});
+
+test("update fails instead of silently exiting when a prompt hits closed stdin", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "icuewidget-"));
+  const widgetDir = path.join(root, "widget");
+  await makeWidget(widgetDir);
+
+  // makeWidget omits min_app_version, so update must prompt for it; empty stdin ends immediately.
+  const result = spawnSync(process.execPath, [bin, "update", widgetDir, "--version", "1.0.2"], { encoding: "utf8", input: "", env: noUpdateEnv() });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr + result.stdout, /Input ended while waiting for/);
+
+  const manifest = JSON.parse(await fs.readFile(path.join(widgetDir, "manifest.json"), "utf8"));
+  assert.equal(manifest.version, "1.0.0");
+});
+
 async function exists(filePath) {
   try {
     await fs.access(filePath);
