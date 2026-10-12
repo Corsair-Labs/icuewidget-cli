@@ -4,9 +4,9 @@ This repository contains the `icuewidget` command-line tool for creating, valida
 
 The CLI uses:
 
-- Node.js so it can run through `npx` without a native installer
+- Node.js 18 or newer, so it runs through `npx` or a global npm install
 - built-in Node APIs for prompts, validation, and `.icuewidget` packaging
-- optional native installer builders for Windows `.exe` and macOS `.pkg`
+- no runtime dependencies
 
 ## Commands
 
@@ -21,18 +21,16 @@ The CLI uses:
 
 ```text
 .github/workflows/
-installer/
 node-bin/
-scripts/
 src-node/
 test-node/
 package-lock.json
 package.json
 ```
 
-## Run with npx
+## Install
 
-After publishing to npm:
+Run without installing:
 
 ```bash
 npx icuewidget-cli --help
@@ -40,6 +38,13 @@ npx icuewidget-cli init ./MyWidget
 npx icuewidget-cli validate ./MyWidget
 npx icuewidget-cli update ./MyWidget --min-app-version 5.45
 npx icuewidget-cli package ./MyWidget
+```
+
+Or install globally:
+
+```bash
+npm install -g icuewidget-cli
+icuewidget --help
 ```
 
 ## Run locally without publishing
@@ -92,72 +97,5 @@ icuewidget init ./HelloWidget
 
 ## Versioning
 
-The source package uses the base version `0.4.0`. Release automation can set the
-third digit at build time with one of these environment variables:
-
-```bash
-CLI_BUILD_PATCH=123 npm run build
-CLI_BUILD_VERSION=0.4.123 npm run build
-```
-
-`CLI_BUILD_PATCH`, `BUILD_NUMBER`, or `GITHUB_RUN_NUMBER` produces
-`0.4.<patch>` for installer filenames and the bundled CLI `--version` output.
-
-For npm publishing, publish a full semantic version, for example:
-
-```bash
-npm version 0.4.123
-npm publish --access public
-```
-
-## npm publishing
-
-Before publishing, verify the package contents and tests:
-
-```bash
-npm test
-npm pack --dry-run
-```
-
-Then publish from this package directory:
-
-```bash
-npm publish --access public
-```
-
-Only the CLI runtime files listed in `package.json` are published to npm. The
-installer assets and build scripts stay in the repository and are excluded from
-the npm package.
-
-## Native installers
-
-The repository can also build native installers for users who do not want to use
-`npx` or `npm install -g`.
-
-Build standalone binaries first, then the platform installer:
-
-```bash
-npm run build
-```
-
-Outputs are written to:
-
-```text
-release/
-```
-
-Platform requirements:
-
-- Windows `.exe`: build on Windows with NSIS `makensis` on `PATH`
-- macOS `.pkg`: build on macOS with `pkgbuild` and `productbuild`
-
-By default, installer builds package the checked-out local CLI source. To build
-from a published npm package or tarball, set `CLI_PACKAGE_SPEC`:
-
-```bash
-CLI_PACKAGE_SPEC=icuewidget-cli@latest npm run build
-CLI_PACKAGE_SPEC=./corsair-icuewidget-cli-1.0.0.tgz npm run build
-```
-
-The installers include best-effort cleanup for older Python-distributed versions
-of `icuewidget-cli` before installing the standalone Node CLI binary.
+The CLI follows semantic versioning. The version lives only in `package.json`,
+and `icuewidget --version` reads it from there.

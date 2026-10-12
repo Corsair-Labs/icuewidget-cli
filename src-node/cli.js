@@ -28,8 +28,13 @@ export async function main(argv = process.argv) {
       await runUpdateCheckWorker();
       return;
     }
-    if (args.length === 0 || has(args, "--help") || has(args, "-h")) {
+    if (args.length === 0) {
       printHelp();
+      return;
+    }
+    if (has(args, "--help") || has(args, "-h")) {
+      if (COMMANDS.includes(args[0])) printCommandHelp(args[0]);
+      else printHelp();
       return;
     }
     // `update <widget> --version <semver>` uses --version as a subcommand option, so only
@@ -169,9 +174,11 @@ function printHelp() {
   panel("Commands", [
     `${color.cyan("init")}      Creates a new widget from the starter template.`,
     `${color.cyan("validate")}  Validates widget files and manifest requirements.`,
-    `${color.cyan("update")}    Updates manifest requirements, bumps widget version, and regenerates package.`,
+    `${color.cyan("update")}    Sets the minimum iCUE version and/or widget version, then regenerates the package.`,
     `${color.cyan("package")}   Validates widget and creates an .icuewidget package.`,
   ]);
+  console.log(`Run ${color.bold(`${APP_NAME} <command> --help`)} for command-specific options.`);
+  console.log();
   panel("Examples", [
     `${APP_NAME} init HelloWidget`,
     `${APP_NAME} validate HelloWidget`,
@@ -179,6 +186,49 @@ function printHelp() {
     `${APP_NAME} update HelloWidget --version 1.0.1`,
     `${APP_NAME} package HelloWidget`,
   ], color.magenta);
+}
+
+const COMMAND_HELP = {
+  init: {
+    usage: "init [<dir>]",
+    summary: "Creates a new widget from the starter template, prompting for its details.",
+    options: [],
+    examples: ["init HelloWidget"],
+  },
+  validate: {
+    usage: "validate [<widget-dir>]",
+    summary: "Validates widget files and manifest requirements.",
+    options: [],
+    examples: ["validate HelloWidget"],
+  },
+  update: {
+    usage: "update [<widget-dir>] [--min-app-version <ver>] [--version <semver>] [-o <file>]",
+    summary: "Updates the manifest and regenerates the package. Prompts for min_app_version if it is missing.",
+    options: [
+      ["--min-app-version <ver>", "Set manifest.min_app_version (e.g. 5.45 or 5.45.104). Bumps the patch version unless --version is given."],
+      ["--version <semver>", "Set manifest.version (e.g. 1.0.1)."],
+      ["-o, --output <file>", "Write the package to this path."],
+    ],
+    examples: ["update HelloWidget --min-app-version 5.45", "update HelloWidget --version 1.0.1"],
+  },
+  package: {
+    usage: "package [<widget-dir>] [-o <file>]",
+    summary: "Validates the widget and creates an .icuewidget package.",
+    options: [["-o, --output <file>", "Write the package to this path."]],
+    examples: ["package HelloWidget", "package HelloWidget -o dist/hello.icuewidget"],
+  },
+};
+
+function printCommandHelp(command) {
+  const { usage, summary, options, examples } = COMMAND_HELP[command];
+  header(APP_NAME, CLI_VERSION);
+  console.log();
+  console.log(summary);
+  console.log();
+  console.log(`${color.yellow("Usage:")} ${color.bold(APP_NAME)} ${usage}`);
+  console.log();
+  if (options.length) panel("Options", options.map(([flag, text]) => `${color.cyan(flag)}  ${text}`));
+  panel("Examples", examples.map((example) => `${APP_NAME} ${example}`), color.magenta);
 }
 
 function parseArgs(args, specs = {}) {

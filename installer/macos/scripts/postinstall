@@ -1,5 +1,0 @@
-#!/bin/sh
-set -eu
-
-chmod 755 /usr/local/bin/icuewidget || true
-exit 0

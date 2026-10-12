@@ -83,6 +83,20 @@ test("update fails instead of silently exiting when a prompt hits closed stdin",
   assert.equal(manifest.version, "1.0.0");
 });
 
+test("command --help prints command-specific help", () => {
+  const result = spawnSync(process.execPath, [bin, "update", "SomeWidget", "--help"], { encoding: "utf8", env: noUpdateEnv() });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /--min-app-version/);
+  assert.match(result.stdout, /--version <semver>/);
+  assert.doesNotMatch(result.stdout, /Commands/);
+});
+
+test("global help points to command help", () => {
+  const result = spawnSync(process.execPath, [bin, "-h"], { encoding: "utf8", env: noUpdateEnv() });
+  assert.match(result.stdout, /Commands/);
+  assert.match(result.stdout, /<command> --help/);
+});
+
 async function exists(filePath) {
   try {
     await fs.access(filePath);

@@ -14,20 +14,23 @@ export async function updateManifestToLatest(widgetDir, options = {}) {
   const changes = [];
   const requirementChanges = [];
 
-  if (typeof manifest.min_app_version !== "string" || !APP_VERSION_RE.test(manifest.min_app_version.trim())) {
-    let value = options.minAppVersion;
-    if (value !== undefined) {
-      value = value.trim();
-      if (!APP_VERSION_RE.test(value)) throw new Error("--min-app-version must use iCUE version format like 5.45 or 5.45.104.");
-    } else {
-      value = await promptValidated(
-        "Minimum iCUE version required",
-        DEFAULT_APP_VERSION,
-        (answer) => APP_VERSION_RE.test(answer),
-        "Use iCUE version format like 5.45 or 5.45.104.",
-      );
-    }
-    manifest.min_app_version = value;
+  const currentMinAppVersion = typeof manifest.min_app_version === "string" ? manifest.min_app_version.trim() : "";
+  const currentIsValid = APP_VERSION_RE.test(currentMinAppVersion);
+  let minAppVersion;
+  if (options.minAppVersion !== undefined) {
+    // An explicit flag is a setter: validate it and apply it whenever it differs from the manifest.
+    minAppVersion = options.minAppVersion.trim();
+    if (!APP_VERSION_RE.test(minAppVersion)) throw new Error("--min-app-version must use iCUE version format like 5.45 or 5.45.104.");
+  } else if (!currentIsValid) {
+    minAppVersion = await promptValidated(
+      "Minimum iCUE version required",
+      DEFAULT_APP_VERSION,
+      (answer) => APP_VERSION_RE.test(answer),
+      "Use iCUE version format like 5.45 or 5.45.104.",
+    );
+  }
+  if (minAppVersion !== undefined && minAppVersion !== manifest.min_app_version) {
+    manifest.min_app_version = minAppVersion;
     requirementChanges.push("manifest.min_app_version");
   }
 

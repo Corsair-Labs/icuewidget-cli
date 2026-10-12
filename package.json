@@ -8,38 +8,33 @@
     "widget",
     "cli"
   ],
-  "homepage": "https://gitlab.com/corsair-gaming/various-projects/icuewidgets-cli#readme",
+  "homepage": "https://github.com/Corsair-Labs/icuewidget-cli#readme",
   "bugs": {
-    "url": "https://gitlab.com/corsair-gaming/various-projects/icuewidgets-cli/issues"
+    "url": "https://github.com/Corsair-Labs/icuewidget-cli/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://gitlab.com/corsair-gaming/various-projects/icuewidgets-cli.git"
+    "url": "git+https://github.com/Corsair-Labs/icuewidget-cli.git"
   },
   "license": "Apache-2.0",
   "author": "CORSAIR",
   "type": "module",
-  "main": "index.js",
   "bin": {
     "icuewidget": "node-bin/icuewidget.js"
   },
   "files": [
     "node-bin/",
-    "src-node/",
-    "README.md"
+    "src-node/"
   ],
   "scripts": {
     "test": "node --test test-node/*.test.js",
-    "build:binaries": "node scripts/build-binaries.mjs",
-    "build:installers": "node scripts/build-installers.mjs",
-    "build": "npm run build:binaries && npm run build:installers",
-    "check": "node --check scripts/build-binaries.mjs && node --check scripts/build-installers.mjs"
-  },
-  "dependencies": {},
-  "devDependencies": {
-    "@yao-pkg/pkg": "^6.5.1"
+    "pack:check": "npm pack --dry-run",
+    "prepublishOnly": "npm test"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

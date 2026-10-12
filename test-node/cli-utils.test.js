@@ -45,3 +45,33 @@ test("updateManifestToLatest respects explicit version", async () => {
 
   assert.equal(manifest.version, "2.0.0");
 });
+
+async function manifestDir(manifest) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "icuewidget-"));
+  await fs.writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest), "utf8");
+  return dir;
+}
+
+test("updateManifestToLatest --min-app-version overrides an existing valid value", async () => {
+  const dir = await manifestDir({ name: "A", version: "1.0.0", min_app_version: "5.40" });
+
+  const changes = await updateManifestToLatest(dir, { minAppVersion: "5.47" });
+  const manifest = JSON.parse(await fs.readFile(path.join(dir, "manifest.json"), "utf8"));
+
+  assert.deepEqual(changes, ["manifest.version", "manifest.min_app_version"]);
+  assert.equal(manifest.min_app_version, "5.47");
+  assert.equal(manifest.version, "1.0.1");
+});
+
+test("updateManifestToLatest --min-app-version equal to current is a no-op", async () => {
+  const dir = await manifestDir({ name: "A", version: "1.0.0", min_app_version: "5.47" });
+
+  assert.deepEqual(await updateManifestToLatest(dir, { minAppVersion: "5.47" }), []);
+  assert.equal(JSON.parse(await fs.readFile(path.join(dir, "manifest.json"), "utf8")).version, "1.0.0");
+});
+
+test("updateManifestToLatest rejects an invalid --min-app-version even when manifest is valid", async () => {
+  const dir = await manifestDir({ name: "A", version: "1.0.0", min_app_version: "5.47" });
+
+  await assert.rejects(updateManifestToLatest(dir, { minAppVersion: "nope" }), /--min-app-version must use iCUE version format/);
+});
