@@ -173,7 +173,7 @@ function printHelp() {
   ]);
   panel("Commands", [
     `${color.cyan("init")}      Creates a new widget from the starter template.`,
-    `${color.cyan("validate")}  Validates widget files, manifest requirements, and permissions.`,
+    `${color.cyan("validate")}  Validates widget files and manifest requirements.`,
     `${color.cyan("update")}    Sets the minimum iCUE version and/or widget version, then regenerates the package.`,
     `${color.cyan("package")}   Validates widget and creates an .icuewidget package.`,
   ]);
@@ -197,7 +197,7 @@ const COMMAND_HELP = {
   },
   validate: {
     usage: "validate [<widget-dir>]",
-    summary: "Validates widget files, manifest requirements, and manifest permissions (schema errors fail; code-vs-manifest mismatches are warnings).",
+    summary: "Validates widget files and manifest requirements.",
     options: [],
     examples: ["validate HelloWidget"],
   },
