@@ -95,6 +95,30 @@ icuewidget init ./HelloWidget
 ```
 
 
+## Validation
+
+`icuewidget validate` (and `package` / `update`, which validate first) checks the widget files, the manifest, and the `<head>` XML. Errors fail the command; warnings are printed but do not block packaging.
+
+### Manifest permissions
+
+The optional `manifest.permissions` array (see the iCUE widget docs, "Widget Permissions") is validated against the documented schema.
+
+Errors (validation fails):
+
+- `permissions` is not an array, an entry is not an object, or `type` is missing/unknown. Types: `file`, `folder`, `url`, `microphone`, `camera`, `speaker`, `screen`, `clipboard_read_write`, `local_fonts_access`, `self_signed_certificate`, `download`, `application`.
+- `url`: missing/invalid `domain` (must be a bare hostname, IP, or `any` - no protocol, path, or `host:port`); `port` that is not an integer from 1 to 65535; `domain: "localhost"` without a `port`.
+- `file` / `folder`: missing `path`; a path that is neither absolute nor starts with a `<Macro>`; `{Macro}` curly braces (those are only for File System Provider `watchPath()`); an unknown or malformed `<Macro>`. Macros: `Home`, `Desktop`, `Documents`, `Downloads`, `Music`, `Pictures`, `Movies`, `Temp`, `AppData`, `Runtime`.
+- `self_signed_certificate`: missing or non-bare `host`. `application`: missing `application` name.
+- **Undeclared literal access in code** (works even when the manifest has no `permissions` key): a `fetch` / `WebSocket` / `EventSource` / `XMLHttpRequest` / `sendBeacon` call to a literal host that no `url` permission covers (subdomains and ports are honored), or a `watchPath()` literal outside every `file` / `folder` permission. All findings are listed in one error with a suggested manifest entry. The scan reads `index.html`, local scripts, and `manifest.modules`, and skips bundled `common/` files.
+
+Warnings:
+
+- `url` with `domain: "any"` (all external hosts), loopback IP without a port, duplicate entries, undocumented fields, wrong-case macros, `..` path segments, a `file` path that ends in a separator, and applications other than Stream Deck.
+- Plugin/permission mismatches: the Stream Deck plugin without `{ "type": "application", "application": "Stream Deck" }` (and the reverse), and the File System plugin without a `file` / `folder` permission.
+- Pattern-based checks on the same files for `getUserMedia`, `getDisplayMedia`, `navigator.clipboard`, `queryLocalFonts`, audio playback, and downloads without the matching permission, plus network calls with a non-literal URL or `watchPath()` with a non-literal path when no `url` / `file` / `folder` permission exists at all. Dynamic URLs and paths cannot be resolved, so these stay warnings.
+
+The code scan is text-based, so literal URLs in commented-out code are also reported; delete or declare them.
+
 ## Versioning
 
 The CLI follows semantic versioning. The version lives only in `package.json`,

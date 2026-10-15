@@ -131,3 +131,55 @@ test("warns when neither index.html nor referenced scripts reference icueEvents"
   const result = await validateWidget(dir);
   assert.ok(result.warnings.some((w) => /icueEvents/.test(w)));
 });
+
+async function tmpWidgetHtml(html) {
+  const dir = await tmpWidget();
+  await fs.writeFile(path.join(dir, "index.html"), html, "utf8");
+  return dir;
+}
+
+const BODY = '<body><p>HTML&nbsp;body <br> is not parsed as XML</p><script src="scripts/main.js"></script></body></html>';
+
+async function rejectsHeadXml(html, pattern) {
+  const dir = await tmpWidgetHtml(html);
+  await assert.rejects(validateWidget(dir), (error) => {
+    assert.ok(error instanceof ValidationError);
+    assert.match(error.message, /not well-formed XML/i);
+    assert.match(error.message, pattern);
+    return true;
+  });
+}
+
+test("accepts uppercase DOCTYPE and HTML-only syntax after </head>", async () => {
+  const dir = await tmpWidgetHtml(`<!DOCTYPE html>\n<html lang="en">\n<head>${HEAD_META}</head>${BODY}`);
+  const result = await validateWidget(dir);
+  assert.equal(result.manifest.name, "TestWidget");
+});
+
+test("rejects lowercase doctype", async () => {
+  await rejectsHeadXml(`<!doctype html>\n<html lang="en"><head>${HEAD_META}</head>${BODY}`, /line 1, column 1: DOCTYPE must be uppercase/);
+});
+
+test("rejects inline head script that is not valid XML", async () => {
+  await rejectsHeadXml(
+    `<!DOCTYPE html><html><head>${HEAD_META}<script>if (a && b) {}</script></head>${BODY}`,
+    /Bare '&'.*Inline <script>/
+  );
+});
+
+test("rejects HTML-only entity in head", async () => {
+  await rejectsHeadXml(`<!DOCTYPE html><html><head><meta charset="utf-8" /><title>A&nbsp;B</title></head>${BODY}`, /Undefined entity &nbsp;/);
+});
+
+test("rejects boolean attribute in head", async () => {
+  await rejectsHeadXml(`<!DOCTYPE html><html><head>${HEAD_META}<script defer src="scripts/main.js"></script></head>${BODY}`, /"defer".*has no value/);
+});
+
+test("rejects unquoted attribute in head", async () => {
+  await rejectsHeadXml(`<!DOCTYPE html><html lang=en><head>${HEAD_META}</head>${BODY}`, /must be quoted/);
+});
+
+test("rejects head without a title", async () => {
+  const dir = await tmpWidget('<meta charset="utf-8" /><link rel="icon" href="resources/icon.svg" />');
+  await assert.rejects(validateWidget(dir), /no non-empty <title>/);
+});

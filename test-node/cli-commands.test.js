@@ -29,6 +29,35 @@ async function makeWidget(dir) {
   await fs.writeFile(path.join(dir, "index.html"), '<html><head><title>T</title><link rel="icon" href="resources/icon.svg" /><link rel="stylesheet" href="styles/main.css" /></head><body><script src="scripts/main.js"></script></body></html>', "utf8");
 }
 
+test("validate fails with a clear message for an invalid permission", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "icuewidget-"));
+  const widgetDir = path.join(root, "widget");
+  await makeWidget(widgetDir);
+  await setManifest(widgetDir, { min_app_version: "5.52", permissions: [{ type: "url", domain: "localhost" }] });
+
+  const result = spawnSync(process.execPath, [bin, "validate", widgetDir], { encoding: "utf8", env: noUpdateEnv() });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /manifest\.permissions\[0\]\.port is required when domain is "localhost"/);
+});
+
+test("validate prints permission warnings but still succeeds, and package still builds", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "icuewidget-"));
+  const widgetDir = path.join(root, "widget");
+  await makeWidget(widgetDir);
+  await setManifest(widgetDir, { min_app_version: "5.52", required_plugins: ["widgetbuilder.streamdeck:StreamDeck:1.2"] });
+
+  const validate = spawnSync(process.execPath, [bin, "validate", widgetDir], { encoding: "utf8", env: noUpdateEnv() });
+  assert.equal(validate.status, 0, validate.stderr);
+  assert.match(validate.stdout, /Widget is valid/);
+  // The warnings panel wraps long lines to the terminal width, so match short tokens only.
+  assert.match(validate.stdout, /Warnings/);
+  assert.match(validate.stdout, /required_plugins/);
+
+  const pack = spawnSync(process.execPath, [bin, "package", widgetDir], { encoding: "utf8", env: noUpdateEnv() });
+  assert.equal(pack.status, 0, pack.stderr);
+  assert.equal(await exists(path.join(root, "testwidget.icuewidget")), true);
+});
+
 test("help output includes commands", () => {
   const result = spawnSync(process.execPath, [bin, "--help"], { encoding: "utf8", env: noUpdateEnv() });
   assert.equal(result.status, 0);
@@ -96,6 +125,12 @@ test("global help points to command help", () => {
   assert.match(result.stdout, /Commands/);
   assert.match(result.stdout, /<command> --help/);
 });
+
+async function setManifest(widgetDir, patch) {
+  const manifestPath = path.join(widgetDir, "manifest.json");
+  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+  await fs.writeFile(manifestPath, JSON.stringify({ ...manifest, ...patch }), "utf8");
+}
 
 async function exists(filePath) {
   try {

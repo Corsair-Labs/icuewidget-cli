@@ -10,8 +10,11 @@ import {
   SEMVER_RE,
 } from "./constants.js";
 import { ensureInside, pathExists, readJson } from "./fs-utils.js";
+import { ValidationError } from "./errors.js";
+import { auditPermissionUsage, validatePermissions } from "./permissions.js";
+import { findHeadXmlError } from "./xml-head.js";
 
-export class ValidationError extends Error {}
+export { ValidationError };
 
 export async function validateWidget(widgetDir) {
   const root = path.resolve(widgetDir);
@@ -30,7 +33,9 @@ export async function validateWidget(widgetDir) {
     warnings.push("translation.json is missing; localized labels will not be available.");
   }
 
-  await validateIndex(root, warnings);
+  const sources = await validateIndex(root, warnings);
+  sources.push(...(await readModuleSources(root, manifest)));
+  auditPermissionUsage(sources, manifest, warnings);
   return { widgetDir: root, manifest, warnings };
 }
 
@@ -91,6 +96,7 @@ async function validateManifest(root, warnings) {
     }
   }
   if (manifest.required_plugins !== undefined) validateStringArray(manifest.required_plugins, "manifest.required_plugins");
+  validatePermissions(manifest, warnings);
   if (manifest.modules !== undefined) {
     validateStringArray(manifest.modules, "manifest.modules");
     for (const modulePath of manifest.modules) await validateRelativeFile(root, modulePath, "manifest.modules");
@@ -101,13 +107,14 @@ async function validateManifest(root, warnings) {
 
 async function validateIndex(root, warnings) {
   const html = await fs.readFile(path.join(root, "index.html"), "utf8");
-  if (!/<title>[^<]+<\/title>/i.test(html)) warnings.push("index.html does not define a <title>.");
   if (!/rel=["'][^"']*icon/i.test(html)) warnings.push("index.html does not reference a favicon/icon.");
 
   validateHeadWellFormed(html);
+  validateHeadXml(html);
   validatePropertyTypes(html);
   validatePropertyGroups(html);
 
+  const sources = [{ label: "index.html", code: html }];
   let referencesIcueEvents = html.includes("icueEvents");
   const assetRefs = [...extractAttributes(html, "href"), ...extractAttributes(html, "src")];
   for (const ref of assetRefs) {
@@ -117,9 +124,21 @@ async function validateIndex(root, warnings) {
     if (ref.endsWith(".js")) {
       const code = await validateJs(path.join(root, stripQuery(ref)));
       if (code.includes("icueEvents")) referencesIcueEvents = true;
+      sources.push({ label: stripQuery(ref), code });
     }
   }
   if (!referencesIcueEvents) warnings.push("index.html or scripts do not reference icueEvents.");
+  return sources;
+}
+
+// manifest.modules may be ES modules (import/export), so they are read for the permission
+// audit but not syntax-checked with vm.Script.
+async function readModuleSources(root, manifest) {
+  const sources = [];
+  for (const modulePath of manifest.modules ?? []) {
+    sources.push({ label: modulePath, code: await fs.readFile(path.resolve(root, modulePath), "utf8") });
+  }
+  return sources;
 }
 
 // iCUE imports a widget by parsing <head> with a strict XML parser (Qt QDomDocument).
@@ -131,7 +150,12 @@ const VOID_ELEMENTS = ["area", "base", "br", "col", "embed", "hr", "img", "input
 
 function validateHeadWellFormed(html) {
   const headMatch = /<head\b[^>]*>([\s\S]*?)<\/head>/i.exec(html);
-  if (!headMatch) return;
+  if (!headMatch) {
+    throw new ValidationError('index.html has no <head>...</head>. iCUE reads the widget name from <title> in <head> and rejects the widget with "Missing Title Element".');
+  }
+  if (!/<title>[^<]*\S[^<]*<\/title>/.test(headMatch[1])) {
+    throw new ValidationError('index.html <head> has no non-empty <title>. iCUE requires it for the widget name and rejects the widget with "Missing Title Element".');
+  }
   const head = headMatch[1]
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/<script\b[\s\S]*?<\/script>/gi, "")
@@ -147,6 +171,19 @@ function validateHeadWellFormed(html) {
       );
     }
   }
+}
+
+// The void-element check above gives a targeted message for the most common mistake; this
+// runs the full strict-XML check over everything iCUE parses (doctype through </head>),
+// including inline <script>/<style> content, entities, and attribute syntax.
+function validateHeadXml(html) {
+  const error = findHeadXmlError(html);
+  if (!error) return;
+  throw new ValidationError(
+    `index.html is not well-formed XML at line ${error.line}, column ${error.column}: ${error.message}. ` +
+      (error.hint ? `${error.hint} ` : "") +
+      `iCUE parses everything up to </head> as strict XML on import and otherwise rejects the widget with "Missing Title Element".`
+  );
 }
 
 // Each x-icue-property meta declares a control via data-type. iCUE rejects the widget
