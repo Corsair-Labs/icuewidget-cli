@@ -30,7 +30,53 @@ export const ALLOWED_PROPERTY_TYPES = new Set([
   "media-selector",
   "sensors-combobox",
   "sensors-factory",
+  "stream-deck-virtual-device",
 ]);
+
+// Permission types accepted in manifest.permissions (see the iCUE widget docs, "Widget Permissions").
+export const ALLOWED_PERMISSION_TYPES = new Set([
+  "file",
+  "folder",
+  "url",
+  "microphone",
+  "camera",
+  "speaker",
+  "screen",
+  "clipboard_read_write",
+  "local_fonts_access",
+  "self_signed_certificate",
+  "download",
+  "application",
+]);
+
+// Fields documented for each permission type; types not listed take no extra fields.
+export const PERMISSION_TYPE_FIELDS = {
+  file: ["path"],
+  folder: ["path"],
+  url: ["domain", "port"],
+  self_signed_certificate: ["host"],
+  application: ["application"],
+};
+
+// <Macro> prefixes accepted in file/folder permission paths.
+export const PERMISSION_PATH_MACROS = new Set([
+  "Home",
+  "Desktop",
+  "Documents",
+  "Downloads",
+  "Music",
+  "Pictures",
+  "Movies",
+  "Temp",
+  "AppData",
+  "Runtime",
+]);
+
+// External applications the docs list for the "application" permission (compared case-insensitively).
+export const KNOWN_PERMISSION_APPLICATIONS = new Set(["stream deck"]);
+
+export const STREAM_DECK_PLUGIN_PREFIX = "widgetbuilder.streamdeck:";
+export const FILE_SYSTEM_PLUGIN_PREFIX = "widgetbuilder.filesystemprovider:";
 
 export const SEMVER_RE = /^\d+\.\d+\.\d+$/;
 export const APP_VERSION_RE = /^\d+\.\d+(?:\.\d+)?$/;

@@ -10,9 +10,11 @@ import {
   SEMVER_RE,
 } from "./constants.js";
 import { ensureInside, pathExists, readJson } from "./fs-utils.js";
+import { ValidationError } from "./errors.js";
+import { auditPermissionUsage, validatePermissions } from "./permissions.js";
 import { findHeadXmlError } from "./xml-head.js";
 
-export class ValidationError extends Error {}
+export { ValidationError };
 
 export async function validateWidget(widgetDir) {
   const root = path.resolve(widgetDir);
@@ -31,7 +33,9 @@ export async function validateWidget(widgetDir) {
     warnings.push("translation.json is missing; localized labels will not be available.");
   }
 
-  await validateIndex(root, warnings);
+  const sources = await validateIndex(root, warnings);
+  sources.push(...(await readModuleSources(root, manifest)));
+  auditPermissionUsage(sources, manifest, warnings);
   return { widgetDir: root, manifest, warnings };
 }
 
@@ -92,6 +96,7 @@ async function validateManifest(root, warnings) {
     }
   }
   if (manifest.required_plugins !== undefined) validateStringArray(manifest.required_plugins, "manifest.required_plugins");
+  validatePermissions(manifest, warnings);
   if (manifest.modules !== undefined) {
     validateStringArray(manifest.modules, "manifest.modules");
     for (const modulePath of manifest.modules) await validateRelativeFile(root, modulePath, "manifest.modules");
@@ -109,6 +114,7 @@ async function validateIndex(root, warnings) {
   validatePropertyTypes(html);
   validatePropertyGroups(html);
 
+  const sources = [{ label: "index.html", code: html }];
   let referencesIcueEvents = html.includes("icueEvents");
   const assetRefs = [...extractAttributes(html, "href"), ...extractAttributes(html, "src")];
   for (const ref of assetRefs) {
@@ -118,9 +124,21 @@ async function validateIndex(root, warnings) {
     if (ref.endsWith(".js")) {
       const code = await validateJs(path.join(root, stripQuery(ref)));
       if (code.includes("icueEvents")) referencesIcueEvents = true;
+      sources.push({ label: stripQuery(ref), code });
     }
   }
   if (!referencesIcueEvents) warnings.push("index.html or scripts do not reference icueEvents.");
+  return sources;
+}
+
+// manifest.modules may be ES modules (import/export), so they are read for the permission
+// audit but not syntax-checked with vm.Script.
+async function readModuleSources(root, manifest) {
+  const sources = [];
+  for (const modulePath of manifest.modules ?? []) {
+    sources.push({ label: modulePath, code: await fs.readFile(path.resolve(root, modulePath), "utf8") });
+  }
+  return sources;
 }
 
 // iCUE imports a widget by parsing <head> with a strict XML parser (Qt QDomDocument).
