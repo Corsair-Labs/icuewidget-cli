@@ -10,6 +10,7 @@ import {
   SEMVER_RE,
 } from "./constants.js";
 import { ensureInside, pathExists, readJson } from "./fs-utils.js";
+import { findHeadXmlError } from "./xml-head.js";
 
 export class ValidationError extends Error {}
 
@@ -101,10 +102,10 @@ async function validateManifest(root, warnings) {
 
 async function validateIndex(root, warnings) {
   const html = await fs.readFile(path.join(root, "index.html"), "utf8");
-  if (!/<title>[^<]+<\/title>/i.test(html)) warnings.push("index.html does not define a <title>.");
   if (!/rel=["'][^"']*icon/i.test(html)) warnings.push("index.html does not reference a favicon/icon.");
 
   validateHeadWellFormed(html);
+  validateHeadXml(html);
   validatePropertyTypes(html);
   validatePropertyGroups(html);
 
@@ -131,7 +132,12 @@ const VOID_ELEMENTS = ["area", "base", "br", "col", "embed", "hr", "img", "input
 
 function validateHeadWellFormed(html) {
   const headMatch = /<head\b[^>]*>([\s\S]*?)<\/head>/i.exec(html);
-  if (!headMatch) return;
+  if (!headMatch) {
+    throw new ValidationError('index.html has no <head>...</head>. iCUE reads the widget name from <title> in <head> and rejects the widget with "Missing Title Element".');
+  }
+  if (!/<title>[^<]*\S[^<]*<\/title>/.test(headMatch[1])) {
+    throw new ValidationError('index.html <head> has no non-empty <title>. iCUE requires it for the widget name and rejects the widget with "Missing Title Element".');
+  }
   const head = headMatch[1]
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/<script\b[\s\S]*?<\/script>/gi, "")
@@ -147,6 +153,19 @@ function validateHeadWellFormed(html) {
       );
     }
   }
+}
+
+// The void-element check above gives a targeted message for the most common mistake; this
+// runs the full strict-XML check over everything iCUE parses (doctype through </head>),
+// including inline <script>/<style> content, entities, and attribute syntax.
+function validateHeadXml(html) {
+  const error = findHeadXmlError(html);
+  if (!error) return;
+  throw new ValidationError(
+    `index.html is not well-formed XML at line ${error.line}, column ${error.column}: ${error.message}. ` +
+      (error.hint ? `${error.hint} ` : "") +
+      `iCUE parses everything up to </head> as strict XML on import and otherwise rejects the widget with "Missing Title Element".`
+  );
 }
 
 // Each x-icue-property meta declares a control via data-type. iCUE rejects the widget

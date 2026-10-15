@@ -6,7 +6,7 @@ export const APP_NAME = "icuewidget";
 export const NPM_PACKAGE_NAME = packageJson.name;
 export const CLI_VERSION = packageJson.version;
 export const DEFAULT_APP_VERSION = "5.45";
-export const DEFAULT_FRAMEWORK_VERSION = "1.0.0";
+export const DEFAULT_FRAMEWORK_VERSION = "1.4.0";
 export const DEFAULT_PLATFORM = "windows";
 export const DEFAULT_DEVICE_TYPE = "dashboard_lcd";
 
