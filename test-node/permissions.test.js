@@ -61,6 +61,18 @@ async function rejects(options, pattern) {
   });
 }
 
+// Provable literal mismatches fail validation; every undeclared finding is listed in one error.
+async function rejectsAudit(options, includes, excludes = []) {
+  const dir = await tmpWidget(options);
+  await assert.rejects(validateWidget(dir), (error) => {
+    assert.ok(error instanceof ValidationError, `expected ValidationError, got ${error}`);
+    assert.match(error.message, /does not declare/);
+    for (const pattern of includes) assert.match(error.message, pattern);
+    for (const pattern of excludes) assert.doesNotMatch(error.message, pattern);
+    return true;
+  });
+}
+
 function permissionWarnings(result) {
   return result.warnings.filter((w) => !/icueEvents|favicon|translation/.test(w));
 }
@@ -274,9 +286,18 @@ test("accepts the stream-deck-virtual-device control type", async () => {
 
 const urlPerm = (domain, port) => ({ type: "url", domain, ...(port ? { port } : {}) });
 
-test("audit: fetch to an undeclared host warns with a suggested entry", async () => {
-  const result = await validate({ script: "window.icueEvents = {}; fetch('https://api.example.com/v1/data');" });
-  assertWarning(result, /scripts\/main\.js: fetch\(\) to api\.example\.com has no matching url permission.*"domain": "api\.example\.com"/);
+test("audit: fetch to an undeclared host fails with a suggested entry", async () => {
+  await rejectsAudit(
+    { script: "window.icueEvents = {}; fetch('https://api.example.com/v1/data');" },
+    [/scripts\/main\.js: fetch\(\) to api\.example\.com has no matching url permission.*"domain": "api\.example\.com"/],
+  );
+});
+
+test("audit: a widget with no permissions key still fails on an undeclared literal host", async () => {
+  const dir = await tmpWidget({ script: "window.icueEvents = {}; fetch('https://api.example.com/v1/data');" });
+  const manifest = JSON.parse(await fs.readFile(path.join(dir, "manifest.json"), "utf8"));
+  assert.equal(manifest.permissions, undefined);
+  await assert.rejects(validateWidget(dir), /api\.example\.com has no matching url permission/);
 });
 
 test("audit: declared host (and parent domain) silences the warning", async () => {
@@ -285,24 +306,27 @@ test("audit: declared host (and parent domain) silences the warning", async () =
   assertNoWarnings(await validate({ script, manifest: { permissions: [urlPerm("example.com")] } }));
 });
 
-test("audit: a sibling or lookalike domain is not covered", async () => {
+test("audit: a sibling or lookalike domain fails", async () => {
   const script = "window.icueEvents = {}; fetch('https://badexample.com/x');";
-  const result = await validate({ script, manifest: { permissions: [urlPerm("example.com")] } });
-  assertWarning(result, /badexample\.com has no matching url permission/);
+  await rejectsAudit({ script, manifest: { permissions: [urlPerm("example.com")] } }, [/badexample\.com has no matching url permission/]);
 });
 
 test("audit: port must match the declared port", async () => {
   const script = "window.icueEvents = {}; fetch('https://api.example.com/x'); fetch('http://api.example.com:8080/y');";
-  const result = await validate({ script, manifest: { permissions: [urlPerm("api.example.com", 443)] } });
-  assertWarning(result, /api\.example\.com:8080 has no matching url permission/);
-  assert.ok(!result.warnings.some((w) => /to api\.example\.com has no matching/.test(w)));
+  await rejectsAudit(
+    { script, manifest: { permissions: [urlPerm("api.example.com", 443)] } },
+    [/api\.example\.com:8080 has no matching url permission/],
+    [/to api\.example\.com has no matching/],
+  );
 });
 
 test("audit: domain any covers external hosts but not localhost", async () => {
   const script = "window.icueEvents = {}; fetch('https://api.example.com/x'); fetch('http://localhost:8080/y');";
-  const result = await validate({ script, manifest: { permissions: [urlPerm("any")] } });
-  assertWarning(result, /to localhost:8080 has no matching url permission/);
-  assert.ok(!result.warnings.some((w) => /to api\.example\.com has no matching/.test(w)));
+  await rejectsAudit(
+    { script, manifest: { permissions: [urlPerm("any")] } },
+    [/to localhost:8080 has no matching url permission/],
+    [/to api\.example\.com has no matching/],
+  );
 });
 
 test("audit: localhost with the declared port is covered", async () => {
@@ -318,17 +342,17 @@ test("audit: WebSocket, EventSource, XMLHttpRequest, and sendBeacon literals are
     "const x = new XMLHttpRequest(); x.open('GET', 'https://xhr.example.com/a');",
     "navigator.sendBeacon('https://beacon.example.com/b', '');",
   ].join("\n");
-  const result = await validate({ script });
-  for (const host of ["ws.example.com", "sse.example.com", "xhr.example.com", "beacon.example.com"]) {
-    assertWarning(result, new RegExp(`to ${host.replace(/\./g, "\\.")} has no matching url permission`));
-  }
+  await rejectsAudit(
+    { script },
+    ["ws.example.com", "sse.example.com", "xhr.example.com", "beacon.example.com"].map(
+      (host) => new RegExp(`to ${host.replace(/\./g, "\\.")} has no matching url permission`),
+    ),
+  );
 });
 
 test("audit: template-literal URLs are checked by host; dynamic hosts are skipped", async () => {
   const script = "window.icueEvents = {}; const c = 'x'; fetch(`https://api.example.com/q?c=${c}`); fetch(`https://${c}.example.org/q`);";
-  const result = await validate({ script });
-  assertWarning(result, /to api\.example\.com has no matching url permission/);
-  assert.ok(!result.warnings.some((w) => /example\.org/.test(w)));
+  await rejectsAudit({ script }, [/to api\.example\.com has no matching url permission/], [/example\.org/]);
 });
 
 test("audit: relative fetch needs no url permission", async () => {
@@ -351,17 +375,18 @@ test("audit: a non-literal network call is quiet when url permissions exist", as
 
 test("audit: inline scripts and manifest modules are scanned; bundled common/ files are not", async () => {
   const html = `<html><head>${HEAD}</head><body><script>window.icueEvents = {}; fetch('https://inline.example.com/x');</script></body></html>`;
-  const result = await validate({
-    html,
-    manifest: { modules: ["modules/Search.mjs"] },
-    files: {
-      "modules/Search.mjs": "export async function search() { return fetch('https://module.example.com/s'); }",
-      "common/tools/thing.js": "fetch('https://common.example.com/c');",
+  await rejectsAudit(
+    {
+      html,
+      manifest: { modules: ["modules/Search.mjs"] },
+      files: {
+        "modules/Search.mjs": "export async function search() { return fetch('https://module.example.com/s'); }",
+        "common/tools/thing.js": "fetch('https://common.example.com/c');",
+      },
     },
-  });
-  assertWarning(result, /index\.html: fetch\(\) to inline\.example\.com/);
-  assertWarning(result, /modules\/Search\.mjs: fetch\(\) to module\.example\.com/);
-  assert.ok(!result.warnings.some((w) => /common\.example\.com/.test(w)));
+    [/index\.html: fetch\(\) to inline\.example\.com/, /modules\/Search\.mjs: fetch\(\) to module\.example\.com/],
+    [/common\.example\.com/],
+  );
 });
 
 test("audit: hardware, clipboard, font, audio, and download APIs need their permissions", async () => {
@@ -389,9 +414,9 @@ test("audit: <audio> markup in index.html needs the speaker permission", async (
   assertWarning(await validate({ html, files: { "resources/a.mp3": "" } }), /index\.html: uses audio playback/);
 });
 
-test("audit: watchPath literals must fall inside a declared file or folder", async () => {
+test("audit: watchPath literals must fall inside a declared file or folder (error)", async () => {
   const script = "window.icueEvents = {}; p.watchPath('{Documents}/icue-test-watch/watch.txt');";
-  assertWarning(await validate({ script }), /watchPath\("\{Documents\}\/icue-test-watch\/watch\.txt"\) is not covered.*<Documents>\/icue-test-watch\/watch\.txt/);
+  await rejectsAudit({ script }, [/watchPath\("\{Documents\}\/icue-test-watch\/watch\.txt"\) is not covered.*<Documents>\/icue-test-watch\/watch\.txt/]);
   assertNoWarnings(await validate({ script, manifest: { permissions: [{ type: "file", path: "<Documents>/icue-test-watch/watch.txt" }] } }));
   assertNoWarnings(await validate({ script, manifest: { permissions: [{ type: "folder", path: "<Documents>/icue-test-watch" }] } }));
   assertNoWarnings(await validate({ script, manifest: { permissions: [{ type: "folder", path: "<Documents>/icue-test-watch/" }] } }));
@@ -399,9 +424,9 @@ test("audit: watchPath literals must fall inside a declared file or folder", asy
 
 test("audit: watchPath is not covered by a sibling folder or a different file", async () => {
   const script = "window.icueEvents = {}; p.watchPath('{Documents}/icue-test-watch2/x.txt');";
-  assertWarning(await validate({ script, manifest: { permissions: [{ type: "folder", path: "<Documents>/icue-test-watch" }] } }), /is not covered/);
+  await rejectsAudit({ script, manifest: { permissions: [{ type: "folder", path: "<Documents>/icue-test-watch" }] } }, [/is not covered/]);
   const fileScript = "window.icueEvents = {}; p.watchPath('{Documents}/a/other.txt');";
-  assertWarning(await validate({ script: fileScript, manifest: { permissions: [{ type: "file", path: "<Documents>/a/watch.txt" }] } }), /is not covered/);
+  await rejectsAudit({ script: fileScript, manifest: { permissions: [{ type: "file", path: "<Documents>/a/watch.txt" }] } }, [/is not covered/]);
 });
 
 test("audit: dynamic watchPath without any file/folder permission warns", async () => {

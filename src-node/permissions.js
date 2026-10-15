@@ -252,10 +252,14 @@ const API_CHECKS = [
   },
 ];
 
-// Heuristic scan of the widget's own HTML/JS for calls that need a manifest permission.
-// It only emits warnings: literal URLs and paths can be checked precisely, dynamic ones
-// cannot, and commented-out code can trigger false positives. Bundled iCUE tools under
-// common/ are skipped.
+// Scan of the widget's own HTML/JS for calls that need a manifest permission. Bundled iCUE
+// tools under common/ are skipped.
+//
+// Findings that can be proven from literals - a fetch/WebSocket/EventSource/XMLHttpRequest/
+// sendBeacon to a literal host that no url permission covers, or a watchPath() literal that
+// no file/folder permission covers - are errors and fail validation. Everything else is a
+// warning: dynamic URLs and paths cannot be resolved, and the API-usage checks (audio,
+// downloads, clipboard, ...) are pattern matches. Commented-out code can trigger either kind.
 export function auditPermissionUsage(sources, manifest, warnings) {
   const permissions = getPermissions(manifest);
   const urlPermissions = permissions.filter((p) => p.type === "url");
@@ -268,6 +272,10 @@ export function auditPermissionUsage(sources, manifest, warnings) {
       warnings.push(message);
     }
   };
+  const errors = [];
+  const fail = (message) => {
+    if (!errors.includes(message)) errors.push(message);
+  };
 
   for (const { label, code } of sources) {
     if (isBundledCommonFile(label)) continue;
@@ -278,7 +286,7 @@ export function auditPermissionUsage(sources, manifest, warnings) {
       const target = parseTarget(url.value);
       if (!target) continue;
       if (!urlPermissions.some((p) => urlPermissionCovers(p, target))) {
-        warn(
+        fail(
           `${label}: ${url.call} to ${target.host}${target.explicitPort ? `:${target.port}` : ""} has no matching url permission. ` +
             `Add { "type": "url", "domain": "${target.host}"${target.isLocal || target.explicitPort ? `, "port": ${target.port}` : ""} } to manifest.permissions.`,
         );
@@ -303,7 +311,7 @@ export function auditPermissionUsage(sources, manifest, warnings) {
       }
       if (!pathPermissions.some((p) => pathPermissionCovers(p, watch.value))) {
         const manifestPath = watch.value.replace(/^\{([A-Za-z]+)\}/, "<$1>");
-        warn(
+        fail(
           `${label}: watchPath("${watch.value}") is not covered by a file or folder permission. ` +
             `Add { "type": "file" or "folder", "path": "${manifestPath}" } to manifest.permissions (manifest paths use <Macro>, watchPath uses {Macro}).`,
         );
@@ -319,6 +327,13 @@ export function auditPermissionUsage(sources, manifest, warnings) {
         );
       }
     }
+  }
+
+  if (errors.length) {
+    throw new ValidationError(
+      `Widget code uses resources that manifest.permissions does not declare. iCUE blocks undeclared access or interrupts the user with a runtime prompt, so declare them in manifest.permissions:\n` +
+        errors.map((message) => `  - ${message}`).join("\n"),
+    );
   }
 }
 
