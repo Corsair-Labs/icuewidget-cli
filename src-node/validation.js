@@ -13,6 +13,7 @@ import { ensureInside, pathExists, readJson } from "./fs-utils.js";
 import { ValidationError } from "./errors.js";
 import { auditPermissionUsage, validatePermissions } from "./permissions.js";
 import { findHeadXmlError } from "./xml-head.js";
+import { checkHeadRules } from "./head-rules.js";
 
 export { ValidationError };
 
@@ -33,7 +34,7 @@ export async function validateWidget(widgetDir) {
     warnings.push("translation.json is missing; localized labels will not be available.");
   }
 
-  const sources = await validateIndex(root, warnings);
+  const sources = await validateIndex(root, warnings, manifest);
   sources.push(...(await readModuleSources(root, manifest)));
   auditPermissionUsage(sources, manifest, warnings);
   return { widgetDir: root, manifest, warnings };
@@ -105,12 +106,19 @@ async function validateManifest(root, warnings) {
   return manifest;
 }
 
-async function validateIndex(root, warnings) {
+async function validateIndex(root, warnings, manifest = {}) {
   const html = await fs.readFile(path.join(root, "index.html"), "utf8");
   if (!/rel=["'][^"']*icon/i.test(html)) warnings.push("index.html does not reference a favicon/icon.");
 
   validateHeadWellFormed(html);
   validateHeadXml(html);
+  const headRules = checkHeadRules(html, manifest.name);
+  warnings.push(...headRules.warnings);
+  if (headRules.errors.length) {
+    throw new ValidationError(
+      `index.html <head> will be rejected by iCUE ("Missing Title Element"):\n  - ${headRules.errors.join("\n  - ")}`
+    );
+  }
   validatePropertyTypes(html);
   validatePropertyGroups(html);
 

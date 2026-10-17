@@ -8,7 +8,7 @@ import { ValidationError, validateWidget } from "../src-node/validation.js";
 
 const HEAD = [
   '<meta charset="utf-8" />',
-  "<title>T</title>",
+  "<title>TestWidget</title>",
   '<link rel="icon" href="resources/icon.svg" />',
 ].join("");
 

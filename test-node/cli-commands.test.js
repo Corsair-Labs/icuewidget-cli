@@ -95,7 +95,7 @@ test("update --version sets the manifest version instead of printing the CLI ver
 test("global --version still prints the CLI version", () => {
   const result = spawnSync(process.execPath, [bin, "--version"], { encoding: "utf8", env: noUpdateEnv() });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout.trim(), /^\d+\.\d+\.\d+$/);
+  assert.match(result.stdout.trim(), /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/);
 });
 
 test("update fails instead of silently exiting when a prompt hits closed stdin", async () => {

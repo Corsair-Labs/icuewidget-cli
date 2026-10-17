@@ -1,0 +1,11 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { checkHeadRules } from "../src-node/head-rules.js";
+const doc = (head, body = "<div></div>") => `<!DOCTYPE html>\n<html>\n<head>\n<title>W</title>\n${head}\n</head>\n<body>${body}</body></html>`;
+test("clean head passes", () => assert.deepEqual(checkHeadRules(doc('<script type="application/json" id="x-icue-groups">[]</script>'), "W"), { errors: [], warnings: [] }));
+test("non-ASCII is an error with line", () => assert.match(checkHeadRules(doc("<!-- a \u2014 b -->"), "W").errors[0], /line 5: non-ASCII character U\+2014/));
+test("<header> in body is an error", () => assert.match(checkHeadRules(doc("", "<header>x</header>"), "W").errors[0], /<header/));
+test("inline style/script warn", () => assert.equal(checkHeadRules(doc("<style>a{}</style><script>1</script>"), "W").warnings.length, 2));
+test("title mismatch warns", () => assert.match(checkHeadRules(doc(""), "X").warnings[0], /does not match/));
+test("tr() title matching name warns softly", () => assert.match(checkHeadRules(doc("").replace("<title>W", "<title>tr('W')"), "W").warnings[0], /prefer plain/));
+test("BOM warns", () => assert.match(checkHeadRules("\ufeff" + doc(""), "W").warnings[0], /BOM/));
