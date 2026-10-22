@@ -183,3 +183,14 @@ test("rejects head without a title", async () => {
   const dir = await tmpWidget('<meta charset="utf-8" /><link rel="icon" href="resources/icon.svg" />');
   await assert.rejects(validateWidget(dir), /no non-empty <title>/);
 });
+
+test("warns when manifest.id has uppercase letters (docs: lowercase only)", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "icuewidget-id-"));
+  await makeWidget(dir);
+  const manifestPath = path.join(dir, "manifest.json");
+  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+  manifest.id = "com.Test.Widget";
+  await fs.writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+  const { warnings } = await validateWidget(dir);
+  assert.ok(warnings.some((w) => /uppercase letters.*com\.test\.widget/.test(w)));
+});

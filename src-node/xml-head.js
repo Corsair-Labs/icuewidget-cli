@@ -1,7 +1,8 @@
 // Strict XML well-formedness check for the start of index.html up to and including </head>.
 //
 // iCUE imports a widget by parsing the document head with a strict XML parser (Qt). Anything
-// that is valid HTML but not valid XML (lowercase <!doctype>, unclosed void elements, unquoted
+// that is valid HTML but not valid XML (lowercase <!doctype> - confirmed by test import 2026-10-21,
+// two otherwise identical widgets, only the uppercase one imported -, unclosed void elements, unquoted
 // or valueless attributes, bare `&` or `<` in inline scripts, HTML-only entities like &nbsp;)
 // makes the parse fail, and iCUE reports "Missing Title Element" even when <title> is present.
 // The scanner stops as soon as </head> closes, so the <body> is free to be ordinary HTML.

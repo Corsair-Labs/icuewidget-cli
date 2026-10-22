@@ -15,6 +15,21 @@ const decode = (text) =>
     .replace(/&#([0-9]+);/g, (_, d) => String.fromCodePoint(Number(d)))
     .replace(/&amp;/g, "&");
 
+// Classifies the trimmed <title> text: { kind: "literal", text } for tr('X'), tr("X"), 'X' or "X";
+// { kind: "bare" } for text that is not a JS expression iCUE can evaluate as a string
+// (no quotes, no call); { kind: "expression" } for anything else (left unchecked).
+export function parseTitleExpression(raw) {
+  const lit = (src) => {
+    const m = /^(['"])((?:\\.|(?!\1)[^\\])*)\1$/.exec(src);
+    return m ? m[2].replace(/\\(.)/g, "$1") : null;
+  };
+  const call = /^tr\(\s*([\s\S]*?)\s*\)$/.exec(raw);
+  const text = lit(call ? call[1] : raw);
+  if (text !== null) return { kind: "literal", text };
+  if (!/['"`(]/.test(raw)) return { kind: "bare" };
+  return { kind: "expression" };
+}
+
 export function checkHeadRules(html, manifestName) {
   const errors = [];
   const warnings = [];
@@ -49,17 +64,26 @@ export function checkHeadRules(html, manifestName) {
     add(warnings, m.index, `inline <${tag.toLowerCase()}> block in <head>. Its content is parsed as strict XML (any '<', '&' or '--' breaks import). Move CSS/JS to <body> or an external file; only the x-icue-groups script belongs in <head>.`);
   }
 
-  // 3. Title: exactly one, non-empty, plain text matching manifest.name.
+  // 3. Title: exactly one, non-empty JS expression naming the widget.
+  // iCUE evaluates <title> as a JavaScript expression (docs: "Use tr('Name') for translations";
+  // official samples use tr('Name') or a quoted literal 'Name'). A bare title such as
+  // <title>NetCurrent</title> throws "ReferenceError: NetCurrent is not defined" at runtime
+  // (issue #10); multi-word bare text is a SyntaxError. Widgets with bare titles still import
+  // (e.g. AgentPad), so this is a warning, not an error. Accept tr('X')/tr("X") and 'X'/"X",
+  // compare X to manifest.name, and warn on bare text. Other expressions are not checked.
   const titles = [...head.matchAll(/<title\b[^>]*>([\s\S]*?)<\/title\s*>/gi)];
   if (titles.length > 1) add(errors, titles[1].index, `<head> has ${titles.length} <title> elements; keep exactly one.`);
-  if (titles.length >= 1 && typeof manifestName === "string") {
-    const raw = titles[0][1].trim();
-    const tr = /^tr\((['"])(.*)\1\)$/.exec(raw);
-    const text = decode(tr ? tr[2] : raw);
-    if (text !== manifestName.trim()) {
-      add(warnings, titles[0].index, `<title> "${raw}" does not match manifest.name "${manifestName}". Use the manifest name as plain text.`);
-    } else if (tr) {
-      add(warnings, titles[0].index, `<title> uses ${raw}; prefer plain text identical to manifest.name.`);
+  if (titles.length >= 1) {
+    const raw = decode(titles[0][1]).trim();
+    const title = parseTitleExpression(raw);
+    if (title.kind === "bare") {
+      add(
+        warnings,
+        titles[0].index,
+        `<title>${raw}</title> is bare text. iCUE evaluates <title> as a JavaScript expression, so bare text can throw a ReferenceError/SyntaxError (e.g. "ReferenceError: NetCurrent is not defined") and the name may not resolve; import is not blocked. Use <title>tr('${raw}')</title> (with a translation.json entry) or the quoted literal <title>'${raw}'</title>.`
+      );
+    } else if (title.kind === "literal" && typeof manifestName === "string" && title.text !== manifestName.trim()) {
+      add(warnings, titles[0].index, `<title>${raw}</title> names "${title.text}" but manifest.name is "${manifestName}". Keep them identical (tr('${manifestName}') or '${manifestName}').`);
     }
   }
 

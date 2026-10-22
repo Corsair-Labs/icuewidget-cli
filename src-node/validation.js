@@ -60,6 +60,10 @@ async function validateManifest(root, warnings) {
   }
 
   if (!IDENTIFIER_RE.test(manifest.id)) throw new ValidationError("manifest.id may only contain letters, numbers, dots, and hyphens");
+  if (/[A-Z]/.test(manifest.id)) {
+    // Docs (Getting Started): "Widget IDs must only contain lowercase alphanumeric characters (a-z, 0-9), hyphens (-), and periods (.)."
+    warnings.push(`manifest.id "${manifest.id}" contains uppercase letters; the iCUE docs allow only lowercase a-z, 0-9, hyphens and periods. Use "${manifest.id.toLowerCase()}".`);
+  }
   if (!SEMVER_RE.test(manifest.version)) throw new ValidationError("manifest.version must use semantic version format (for example 1.0.0)");
   if (!APP_VERSION_RE.test(manifest.min_app_version)) throw new ValidationError("manifest.min_app_version must use iCUE version format (for example 5.45)");
   if (!SEMVER_RE.test(manifest.min_framework_version)) throw new ValidationError("manifest.min_framework_version must use semantic version format (for example 1.0.0)");
