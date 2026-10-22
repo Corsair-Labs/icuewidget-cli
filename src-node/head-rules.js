@@ -1,4 +1,4 @@
-// Extra head checks (0.5.1-local). iCUE parses everything up to </head> as strict XML and
+// Extra head checks (0.5.1). iCUE parses everything up to </head> as strict XML and
 // reports "Missing Title Element" on any failure. xml-head.js covers well-formedness; this
 // covers the rules found on real widgets that are well-formed but still fail import, plus
 // best-practice warnings. Returns { errors: string[], warnings: string[] } with line numbers.
