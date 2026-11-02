@@ -85,6 +85,20 @@ async function validateManifest(root, warnings) {
     if (device.features !== undefined) validateStringArray(device.features, `manifest.supported_devices[${index}].features`);
   }
 
+  // pump_dashboard_lcd (5" LCD Screen Module, NAUTILUS II LCD) shipped in Widget API 1.10.0 / iCUE 5.54.
+  if (manifest.supported_devices.some((d) => d.type === "pump_dashboard_lcd")) {
+    if (compareSemver(manifest.min_framework_version, "1.10.0") < 0) {
+      throw new ValidationError(
+        `manifest.min_framework_version must be "1.10.0" or later when supported_devices includes "pump_dashboard_lcd" (got "${manifest.min_framework_version}")`
+      );
+    }
+    if (compareAppVersion(manifest.min_app_version, "5.54") < 0) {
+      throw new ValidationError(
+        `manifest.min_app_version must be "5.54" or later when supported_devices includes "pump_dashboard_lcd" (got "${manifest.min_app_version}")`
+      );
+    }
+  }
+
   if (manifest.interactive !== undefined && typeof manifest.interactive !== "boolean") {
     throw new ValidationError("manifest.interactive must be a boolean when provided");
   }
@@ -300,4 +314,27 @@ function validateStringArray(value, label) {
   for (const [index, item] of value.entries()) {
     if (typeof item !== "string" || item.trim() === "") throw new ValidationError(`${label}[${index}] must be a non-empty string`);
   }
+}
+
+// Compares two "x.y.z" semver strings; returns <0, 0, or >0 like Array#sort comparators.
+function compareSemver(a, b) {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i += 1) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+// Compares two iCUE app version strings ("x.y" or "x.y.z"); same contract as compareSemver.
+function compareAppVersion(a, b) {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i += 1) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
 }
