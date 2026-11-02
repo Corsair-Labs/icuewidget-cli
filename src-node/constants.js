@@ -14,6 +14,7 @@ export const ALLOWED_PLATFORMS = new Set(["windows"]);
 export const ALLOWED_DEVICE_TYPES = new Set([
   "dashboard_lcd",
   "pump_lcd",
+  "pump_dashboard_lcd",
   "keyboard_lcd",
 ]);
 

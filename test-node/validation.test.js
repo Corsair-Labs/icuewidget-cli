@@ -56,6 +56,63 @@ test("accepts valid x-icue-property data-type values", async () => {
   assert.equal(result.manifest.name, "TestWidget");
 });
 
+test("accepts pump_dashboard_lcd as a supported device type", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "icuewidget-validate-"));
+  await makeWidget(dir, {});
+  const manifestPath = path.join(dir, "manifest.json");
+  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+  manifest.supported_devices = [{ type: "pump_dashboard_lcd" }];
+  manifest.min_framework_version = "1.10.0";
+  manifest.min_app_version = "5.54";
+  await fs.writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+  const result = await validateWidget(dir);
+  assert.deepEqual(result.manifest.supported_devices, [{ type: "pump_dashboard_lcd" }]);
+});
+
+test("rejects pump_dashboard_lcd with min_framework_version below 1.10.0", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "icuewidget-validate-"));
+  await makeWidget(dir, {});
+  const manifestPath = path.join(dir, "manifest.json");
+  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+  manifest.supported_devices = [{ type: "pump_dashboard_lcd" }];
+  manifest.min_framework_version = "1.9.0";
+  await fs.writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+  await assert.rejects(validateWidget(dir), (error) => {
+    assert.ok(error instanceof ValidationError);
+    assert.match(error.message, /min_framework_version must be "1\.10\.0" or later/i);
+    return true;
+  });
+});
+
+test("rejects pump_dashboard_lcd with min_app_version below 5.54", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "icuewidget-validate-"));
+  await makeWidget(dir, {});
+  const manifestPath = path.join(dir, "manifest.json");
+  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+  manifest.supported_devices = [{ type: "pump_dashboard_lcd" }];
+  manifest.min_framework_version = "1.10.0";
+  manifest.min_app_version = "5.47";
+  await fs.writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+  await assert.rejects(validateWidget(dir), (error) => {
+    assert.ok(error instanceof ValidationError);
+    assert.match(error.message, /min_app_version must be "5\.54" or later/i);
+    return true;
+  });
+});
+
+test("accepts pump_dashboard_lcd with min_framework_version 1.10.0+ and min_app_version 5.54+", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "icuewidget-validate-"));
+  await makeWidget(dir, {});
+  const manifestPath = path.join(dir, "manifest.json");
+  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+  manifest.supported_devices = [{ type: "pump_dashboard_lcd" }];
+  manifest.min_framework_version = "1.10.0";
+  manifest.min_app_version = "5.54";
+  await fs.writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+  const result = await validateWidget(dir);
+  assert.equal(result.manifest.min_framework_version, "1.10.0");
+});
+
 test("rejects unknown x-icue-property data-type", async () => {
   const dir = await tmpWidget(
     HEAD_META + '<meta name="x-icue-property" content="title" data-label="tr(\'Title\')" data-type="text" data-default="\'Hi\'" />'
