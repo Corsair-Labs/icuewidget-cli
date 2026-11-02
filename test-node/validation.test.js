@@ -56,6 +56,17 @@ test("accepts valid x-icue-property data-type values", async () => {
   assert.equal(result.manifest.name, "TestWidget");
 });
 
+test("accepts pump_dashboard_lcd as a supported device type", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "icuewidget-validate-"));
+  await makeWidget(dir, {});
+  const manifestPath = path.join(dir, "manifest.json");
+  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+  manifest.supported_devices = [{ type: "pump_dashboard_lcd" }];
+  await fs.writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+  const result = await validateWidget(dir);
+  assert.deepEqual(result.manifest.supported_devices, [{ type: "pump_dashboard_lcd" }]);
+});
+
 test("rejects unknown x-icue-property data-type", async () => {
   const dir = await tmpWidget(
     HEAD_META + '<meta name="x-icue-property" content="title" data-label="tr(\'Title\')" data-type="text" data-default="\'Hi\'" />'
